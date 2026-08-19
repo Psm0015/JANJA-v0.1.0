@@ -18,6 +18,9 @@
 
       <section class="stage" id="stage">
         <video id="video" autoplay playsinline muted></video>
+        <button id="unmute-overlay-btn" class="secondary" style="display: none; position: absolute; z-index: 10;">
+          🔊 ATIVAR ÁUDIO
+        </button>
         <div class="empty" id="empty">
           <strong id="empty-title">Pronto para iniciar</strong>
           <span id="empty-copy">Clique para capturar sua tela e depois envie o link do túnel para quem vai assistir.</span>
@@ -32,6 +35,7 @@
           <span>Audio</span>
           <select id="audio-mode">
             <option value="screen" selected>Escolher tela/janela/guia</option>
+            <option value="screen-no-discord">Tela toda (Ignorar Discord)</option>
             <option value="tab">Guia atual com audio</option>
             <option value="input">Entrada do Windows</option>
             <option value="none">Sem audio</option>

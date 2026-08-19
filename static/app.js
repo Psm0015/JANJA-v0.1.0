@@ -200,9 +200,9 @@ function updateMixerStatus() {
 }
 
 function setEmpty(visible, title, copy) {
-  emptyEl.style.display = visible ? "grid" : "none";
-  if (title) emptyTitleEl.textContent = title;
-  if (copy) emptyCopyEl.textContent = copy;
+  if (emptyEl) emptyEl.style.display = visible ? "grid" : "none";
+  if (title && emptyTitleEl) emptyTitleEl.textContent = title;
+  if (copy && emptyCopyEl) emptyCopyEl.textContent = copy;
 }
 
 function send(payload) {
@@ -585,7 +585,8 @@ async function toggleFullscreen() {
     return;
   }
 
-  const target = videoEl.srcObject ? videoEl : stageEl;
+  const target = videoEl.srcObject ? videoEl : (stageEl || videoEl);
+  if (!target) return;
   const request =
     target.requestFullscreen ||
     target.webkitRequestFullscreen ||
@@ -600,10 +601,12 @@ async function toggleFullscreen() {
   try {
     await request.call(target);
   } catch (error) {
-    const fallback = stageEl.requestFullscreen || stageEl.webkitRequestFullscreen || stageEl.msRequestFullscreen;
-    if (fallback && target !== stageEl) {
-      await fallback.call(stageEl);
-      return;
+    if (stageEl && target !== stageEl) {
+      const fallback = stageEl.requestFullscreen || stageEl.webkitRequestFullscreen || stageEl.msRequestFullscreen;
+      if (fallback) {
+        await fallback.call(stageEl);
+        return;
+      }
     }
     setStatus("Tela cheia bloqueada");
   }
@@ -945,10 +948,14 @@ async function loadAudioInputs(requestPermission = false) {
 }
 
 function syncAudioMode() {
-  audioDeviceControl.style.display = audioModeSelect.value === "input" ? "inline-flex" : "none";
-  refreshAudioButton.style.display = audioModeSelect.value === "input" ? "inline-flex" : "none";
-  appMixer.style.display = "none";
-  audioPanel.style.display = "none";
+  if (audioDeviceControl && audioModeSelect) {
+      audioDeviceControl.style.display = audioModeSelect.value === "input" ? "inline-flex" : "none";
+  }
+  if (refreshAudioButton && audioModeSelect) {
+      refreshAudioButton.style.display = audioModeSelect.value === "input" ? "inline-flex" : "none";
+  }
+  if (appMixer) appMixer.style.display = "none";
+  if (audioPanel) audioPanel.style.display = "none";
 }
 
 async function refreshTunnelLink() {
@@ -1062,56 +1069,68 @@ async function toggleTransmissionExclude(processId) {
 
 function setupUi() {
   if (isViewer) {
-    titleEl.textContent = "JANJA";
-    modeEl.textContent = "Visitante";
-    startButton.style.display = "none";
-    stopButton.style.display = "none";
-    audioModeControl.style.display = "none";
-    audioDeviceControl.style.display = "none";
-    refreshAudioButton.style.display = "none";
-    sharePanel.style.display = "none";
-    appMixer.style.display = "none";
-    audioPanel.style.display = "none";
-    volumeControl.style.display = "inline-flex";
-    audioPanelLabel.textContent = "Audio da transmissao";
-    audioPanelStatus.textContent = "Aguardando audio filtrado";
-    switchLink.href = "/host";
-    switchLink.textContent = "Abrir como host";
-    videoEl.controls = true;
-    videoEl.defaultMuted = false;
-    videoEl.removeAttribute("muted");
+    if (titleEl) titleEl.textContent = "JANJA";
+    if (modeEl) modeEl.textContent = "Visitante";
+    if (startButton) startButton.style.display = "none";
+    if (stopButton) stopButton.style.display = "none";
+    if (audioModeControl) audioModeControl.style.display = "none";
+    if (audioDeviceControl) audioDeviceControl.style.display = "none";
+    if (refreshAudioButton) refreshAudioButton.style.display = "none";
+    if (sharePanel) sharePanel.style.display = "none";
+    if (appMixer) appMixer.style.display = "none";
+    if (audioPanel) audioPanel.style.display = "none";
+    if (volumeControl) volumeControl.style.display = "inline-flex";
+    if (typeof audioPanelLabel !== "undefined" && audioPanelLabel) audioPanelLabel.textContent = "Audio da transmissao";
+    if (typeof audioPanelStatus !== "undefined" && audioPanelStatus) audioPanelStatus.textContent = "Aguardando audio filtrado";
+    if (switchLink) {
+        switchLink.href = "/host";
+        switchLink.textContent = "Abrir como host";
+    }
+    if (videoEl) {
+        videoEl.controls = true;
+        videoEl.defaultMuted = false;
+        videoEl.removeAttribute("muted");
+    }
     applyViewerVolume();
     setEmpty(true, "Aguardando transmissao", "Quando o host iniciar, a tela aparece aqui automaticamente.");
   } else {
-    titleEl.textContent = "JANJA";
-    modeEl.textContent = "Host";
-    switchLink.href = "/watch";
-    switchLink.textContent = "Abrir como visitante";
-    appMixer.style.display = "none";
-    audioPanel.style.display = "none";
+    if (titleEl) titleEl.textContent = "JANJA";
+    if (modeEl) modeEl.textContent = "Host";
+    if (switchLink) {
+        switchLink.href = "/watch";
+        switchLink.textContent = "Abrir como visitante";
+    }
+    if (appMixer) appMixer.style.display = "none";
+    if (audioPanel) audioPanel.style.display = "none";
   }
 
-  startButton.addEventListener("click", startShare);
-  stopButton.addEventListener("click", stopShare);
-  fullscreenButton.addEventListener("click", toggleFullscreen);
-  copyLinkButton.addEventListener("click", copyWatchLink);
-  refreshAppsButton.addEventListener("click", loadAudioApps);
-  audioModeSelect.addEventListener("change", syncAudioMode);
-  refreshAudioButton.addEventListener("click", () => loadAudioInputs(true));
+  if (startButton) startButton.addEventListener("click", startShare);
+  if (stopButton) stopButton.addEventListener("click", stopShare);
+  if (fullscreenButton) fullscreenButton.addEventListener("click", toggleFullscreen);
+  if (copyLinkButton) copyLinkButton.addEventListener("click", copyWatchLink);
+  if (refreshAppsButton) refreshAppsButton.addEventListener("click", loadAudioApps);
+  if (audioModeSelect) audioModeSelect.addEventListener("change", syncAudioMode);
+  if (refreshAudioButton) refreshAudioButton.addEventListener("click", () => loadAudioInputs(true));
   document.addEventListener("fullscreenchange", syncFullscreenButton);
   document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
-  volumeInput.addEventListener("input", syncVolume);
-  volumeInput.addEventListener("change", syncVolume);
-  videoEl.addEventListener("click", () => {
-    if (isViewer) {
-      syncVolume();
-      remoteAudioContext?.resume();
-    }
-  });
+  if (volumeInput) {
+      volumeInput.addEventListener("input", syncVolume);
+      volumeInput.addEventListener("change", syncVolume);
+  }
+  if (videoEl) {
+      videoEl.addEventListener("click", () => {
+        if (isViewer) {
+          syncVolume();
+          remoteAudioContext?.resume();
+        }
+      });
+  }
   document.addEventListener("click", () => {
     if (isViewer) {
       remoteAudioContext?.resume();
-      if (filteredAudioPlayer.src) filteredAudioPlayer.play().catch(() => {});
+      if (typeof filteredAudioPlayer !== "undefined" && filteredAudioPlayer && filteredAudioPlayer.src) {
+          filteredAudioPlayer.play().catch(() => {});
+      }
     }
   });
 

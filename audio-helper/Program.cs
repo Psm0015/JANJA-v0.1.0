@@ -8,9 +8,9 @@ if (!OperatingSystem.IsWindows())
     return 2;
 }
 
-if (args.Length == 0 || args[0] is not ("list" or "mute" or "stream-exclude" or "stream-include"))
+if (args.Length == 0 || args[0] is not ("list" or "mute" or "stream-exclude" or "stream-include" or "capabilities"))
 {
-    Console.Error.WriteLine("Usage: AudioHelper list | mute <pid> <true|false> | stream-exclude <pid> | stream-include <pid>");
+    Console.Error.WriteLine("Usage: AudioHelper list | capabilities | mute <pid> <true|false> | stream-exclude <pid> | stream-include <pid>");
     return 2;
 }
 
@@ -35,6 +35,12 @@ try
             .ToArray();
 
         Console.WriteLine(JsonSerializer.Serialize(sessions));
+        return 0;
+    }
+
+    if (args[0] == "capabilities")
+    {
+        Console.WriteLine(JsonSerializer.Serialize(WindowsAudioCapabilities.Current()));
         return 0;
     }
 
@@ -70,6 +76,43 @@ record AudioApp(uint ProcessId, string Name, string WindowTitle, bool Muted, flo
 
 record AudioSession(uint ProcessId, string ProcessName, string WindowTitle, bool Muted, float Volume);
 
+record AudioCapabilityInfo(
+    bool ProcessLoopbackSupported,
+    string OsDescription,
+    string WindowsVersion,
+    int CurrentBuild,
+    int MinimumProcessLoopbackBuild,
+    string Message
+);
+
+static class WindowsAudioCapabilities
+{
+    public const int MinimumProcessLoopbackBuild = 20348;
+
+    public static AudioCapabilityInfo Current()
+    {
+        var version = Environment.OSVersion.Version;
+        var supported = ProcessLoopbackSupported();
+        var message = supported
+            ? "Captura de audio por processo disponivel."
+            : $"Captura de audio por processo requer Windows 10 build {MinimumProcessLoopbackBuild} ou superior. No Windows 10 comum, use audio da guia ou transmita tela sem audio para nao vazar Discord.";
+
+        return new AudioCapabilityInfo(
+            supported,
+            RuntimeInformation.OSDescription,
+            version.ToString(),
+            version.Build,
+            MinimumProcessLoopbackBuild,
+            message
+        );
+    }
+
+    public static bool ProcessLoopbackSupported()
+    {
+        return OperatingSystem.IsWindowsVersionAtLeast(10, 0, MinimumProcessLoopbackBuild);
+    }
+}
+
 static class ProcessLoopbackStreamer
 {
     const string ProcessLoopbackDevice = "VAD\\Process_Loopback";
@@ -78,6 +121,11 @@ static class ProcessLoopbackStreamer
 
     public static void Stream(uint processId, bool includeProcessTree)
     {
+        if (!WindowsAudioCapabilities.ProcessLoopbackSupported())
+        {
+            throw new PlatformNotSupportedException(WindowsAudioCapabilities.Current().Message);
+        }
+
         var audioClient = Activate(processId, includeProcessTree);
         var format = WaveFormatExtensible.PcmStereo44100();
         var formatPtr = Marshal.AllocHGlobal(Marshal.SizeOf<WaveFormatExtensible>());

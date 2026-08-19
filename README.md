@@ -43,6 +43,7 @@ Clique em **Iniciar compartilhamento** e autorize o navegador.
 No campo **Audio**, escolha:
 
 - **Escolher tela/janela/guia** para abrir o seletor completo do navegador e transmitir tela inteira, janela ou uma aba.
+- **Tela toda (Ignorar Discord)** para transmitir a tela sem capturar o Discord quando o Windows suportar filtro de audio por processo.
 - **Guia atual com audio** para permitir diretamente a aba atual, com audio da guia.
 - **Entrada do Windows** para transmitir uma entrada de audio separada.
 - **Sem audio** para transmitir so video.
@@ -73,7 +74,8 @@ $env:DISABLE_TUNNEL="1"; python server.py
 - O visitante pode usar o controle de volume na pagina `/watch`.
 - O botao **Tela cheia** expande a area do video no host ou no visitante.
 - Navegadores nao permitem remover o audio de uma aba ou aplicativo especifico quando voce captura o audio do sistema inteiro. A alternativa sem aplicativos externos e compartilhar uma aba especifica com audio da guia.
-- O helper `audio-helper` ficou no projeto como experimento de captura por processo no Windows, mas o caminho recomendado do MVP e a captura nativa por aba.
+- O modo **Tela toda (Ignorar Discord)** usa a API de audio por processo do Windows quando disponivel. No Windows 10 abaixo do build `20348`, o app transmite o video sem audio nesse modo para nao vazar o Discord. Para manter audio no Windows 10 comum, use uma aba do navegador com **Compartilhar audio da guia** ou uma **Entrada do Windows**.
+- A API oficial de audio por processo exige Windows 10 build `20348` ou superior. Em builds antigos do Windows 10, nao existe um filtro nativo confiavel por aplicativo sem instalar outro driver/app.
 
 ## Teste do audio filtrado
 

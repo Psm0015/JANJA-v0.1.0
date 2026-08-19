@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JANJA v0.1.0</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">Janela de Acesso Nativo e Jornada Assistida · v0.1.0</p>
+          <h1 id="title">JANJA</h1>
+        </div>
+        <div class="status" id="status">Desconectado</div>
+      </section>
+
+      <section class="stage" id="stage">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="empty" id="empty">
+          <strong id="empty-title">Pronto para iniciar</strong>
+          <span id="empty-copy">Clique para capturar sua tela e depois envie o link do túnel para quem vai assistir.</span>
+        </div>
+      </section>
+
+      <section class="controls">
+        <button id="start">Iniciar compartilhamento</button>
+        <button id="stop" class="secondary" disabled>Parar</button>
+        <button id="fullscreen" class="secondary">Tela cheia</button>
+        <label class="select-control" id="audio-mode-control">
+          <span>Audio</span>
+          <select id="audio-mode">
+            <option value="screen" selected>Escolher tela/janela/guia</option>
+            <option value="tab">Guia atual com audio</option>
+            <option value="input">Entrada do Windows</option>
+            <option value="none">Sem audio</option>
+          </select>
+        </label>
+        <label class="select-control" id="audio-device-control">
+          <span>Entrada</span>
+          <select id="audio-device"></select>
+        </label>
+        <button id="refresh-audio" class="secondary">Atualizar audio</button>
+        <label class="volume" id="volume-control">
+          <span>Volume</span>
+          <input id="volume" type="range" min="0" max="100" value="85" />
+          <strong id="volume-value">85%</strong>
+        </label>
+        <a id="switch-link" href="/watch">Abrir como visitante</a>
+      </section>
+
+      <section class="share-panel" id="share-panel">
+        <div>
+          <span>Link para visitante</span>
+          <strong id="tunnel-status">Criando tunel...</strong>
+        </div>
+        <div class="copy-row">
+          <input id="watch-link" type="text" readonly value="Aguardando Cloudflare Tunnel..." />
+          <button id="copy-link" class="secondary" disabled>Copiar</button>
+        </div>
+      </section>
+
+      <section class="app-mixer" id="app-mixer">
+        <div class="mixer-head">
+          <div>
+            <span>Apps com audio</span>
+            <strong id="mixer-status">Carregando apps...</strong>
+          </div>
+          <button id="refresh-apps" class="secondary">Atualizar apps</button>
+        </div>
+        <div class="app-list" id="app-list"></div>
+      </section>
+
+      <section class="audio-panel" id="audio-panel">
+        <div>
+          <span id="audio-panel-label">Audio filtrado</span>
+          <strong id="audio-panel-status">Aguardando selecao</strong>
+        </div>
+        <audio id="filtered-audio-player" controls></audio>
+      </section>
+
+      <section class="details">
+        <div>
+          <span>Visitantes</span>
+          <strong id="viewer-count">0</strong>
+        </div>
+        <div>
+          <span>Modo</span>
+          <strong id="mode">Host</strong>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

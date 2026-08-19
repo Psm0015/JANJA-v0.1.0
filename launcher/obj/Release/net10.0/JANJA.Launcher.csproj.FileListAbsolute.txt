@@ -1,0 +1,14 @@
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\bin\Release\net10.0\JANJA.exe
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\bin\Release\net10.0\JANJA.deps.json
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\bin\Release\net10.0\JANJA.runtimeconfig.json
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\bin\Release\net10.0\JANJA.dll
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\bin\Release\net10.0\JANJA.pdb
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.Launcher.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.Launcher.AssemblyInfoInputs.cache
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.Launcher.AssemblyInfo.cs
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.Launcher.csproj.CoreCompileInputs.cache
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.dll
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\refint\JANJA.dll
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.pdb
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\JANJA.Launcher.genruntimeconfig.cache
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\JANJA-v0.1.0\launcher\obj\Release\net10.0\ref\JANJA.dll

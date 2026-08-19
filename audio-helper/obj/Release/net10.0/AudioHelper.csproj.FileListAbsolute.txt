@@ -1,0 +1,14 @@
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\bin\Release\net10.0\AudioHelper.exe
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\bin\Release\net10.0\AudioHelper.deps.json
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\bin\Release\net10.0\AudioHelper.runtimeconfig.json
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\bin\Release\net10.0\AudioHelper.dll
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\bin\Release\net10.0\AudioHelper.pdb
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.AssemblyInfoInputs.cache
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.AssemblyInfo.cs
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.csproj.CoreCompileInputs.cache
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.dll
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\refint\AudioHelper.dll
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.pdb
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\AudioHelper.genruntimeconfig.cache
+C:\Users\pedro\Documents\Codex\2026-08-19\qu\outputs\screen-share-mvp\audio-helper\obj\Release\net10.0\ref\AudioHelper.dll

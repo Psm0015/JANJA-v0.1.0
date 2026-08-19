@@ -3,14 +3,14 @@ const isViewer = window.location.pathname.includes("watch") || params.get("mode"
 
 const statusEl = document.querySelector("#status");
 const titleEl = document.querySelector("#title");
-const stageEl = document.querySelector("#stage");
-const videoEl = document.querySelector("#video");
+const stageEl = isViewer ? document.querySelector("#viewer-stage") : document.querySelector("#stage");
+const videoEl = isViewer ? document.querySelector("#video-viewer") : document.querySelector("#video-host");
 const emptyEl = document.querySelector("#empty");
 const emptyTitleEl = document.querySelector("#empty-title");
 const emptyCopyEl = document.querySelector("#empty-copy");
 const startButton = document.querySelector("#start");
 const stopButton = document.querySelector("#stop");
-const fullscreenButton = document.querySelector("#fullscreen");
+const fullscreenButton = isViewer ? document.querySelector("#btn-fullscreen-viewer") : document.querySelector("#fullscreen");
 const audioModeControl = document.querySelector("#audio-mode-control");
 const audioModeSelect = document.querySelector("#audio-mode");
 const audioDeviceControl = document.querySelector("#audio-device-control");
@@ -38,6 +38,14 @@ const filteredAudioPlayer = document.querySelector("#filtered-audio-player");
 const peers = new Map();
 let socket;
 let localStream;
+let isSwitchingSource = false;
+let viewerSessionId = sessionStorage.getItem("lule_session_id");
+if (!viewerSessionId) {
+    viewerSessionId = Array.from(crypto.getRandomValues(new Uint32Array(4))).map(b => b.toString(16).padStart(8, '0')).join('');
+    sessionStorage.setItem("lule_session_id", viewerSessionId);
+}
+let heartbeatInterval;
+let lastHeartbeatAck = Date.now();
 let viewerId;
 let viewerPeer;
 let viewerCount = 0;
@@ -214,26 +222,37 @@ function connect() {
   socket = new WebSocket(`${scheme}://${window.location.host}/ws`);
 
   socket.addEventListener("open", () => {
-    send({ type: "join", role: isViewer ? "viewer" : "host" });
+    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId });
     refreshHostStatus();
-    if (isViewer && !videoEl.srcObject) {
+    if (isViewer && !videoEl.srcObject && peers.size === 0) {
       setStatus("Aguardando host");
+    } else if (isViewer) {
+      setStatus("Sinalizacao conectada");
     }
+    
+    clearInterval(heartbeatInterval);
+    lastHeartbeatAck = Date.now();
+    heartbeatInterval = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+            if (Date.now() - lastHeartbeatAck > 45000) {
+                console.warn("[LULE3000] Heartbeat timeout. Fechando socket para forcar reconexao.");
+                socket.close();
+            } else {
+                send({ type: "heartbeat", timestamp: Date.now() });
+            }
+        }
+    }, 20000);
   });
 
   socket.addEventListener("close", () => {
+    clearInterval(heartbeatInterval);
     if (!isViewer) {
-      viewerCount = 0;
-      viewerCountEl.textContent = "0";
-      peers.forEach((peer) => peer.close());
-      peers.clear();
+      refreshHostStatus();
+    } else {
+      setStatus("Sinalizacao reconectando...");
+      // Não damos setEmpty(true) para não matar o player!
     }
-    refreshHostStatus();
-    if (isViewer) {
-      setStatus("Reconectando");
-      setEmpty(true, "Reconectando", "Tentando recuperar a transmissao automaticamente.");
-    }
-    reconnectTimer = setTimeout(connect, 1500);
+    reconnectTimer = setTimeout(connect, 2000);
   });
 
   socket.addEventListener("error", () => {
@@ -243,9 +262,14 @@ function connect() {
   socket.addEventListener("message", async (event) => {
     const data = JSON.parse(event.data);
 
+    if (data.type === "heartbeat-ack") {
+        lastHeartbeatAck = Date.now();
+        return;
+    }
+
     if (data.type === "joined" && data.role === "viewer") {
-      viewerId = data.viewerId;
-      if (!videoEl.srcObject) setStatus("Aguardando host");
+      viewerId = data.viewerId; // Na nova arq, o server devolve nosso sessionId como viewerId
+      if (!videoEl.srcObject && peers.size === 0) setStatus("Aguardando host");
       return;
     }
 
@@ -262,9 +286,41 @@ function connect() {
     }
 
     if (data.type === "viewer-left" && !isViewer) {
-      viewerCount = Math.max(0, viewerCount - 1);
-      viewerCountEl.textContent = String(viewerCount);
-      closePeer(data.viewerId);
+      // Grace period para o host ignorar quedas falsas de viewer
+      setTimeout(() => {
+         const peer = peers.get(data.viewerId);
+         if (peer && peer.connectionState !== "connected" && peer.connectionState !== "checking") {
+            viewerCount = Math.max(0, viewerCount - 1);
+            viewerCountEl.textContent = String(viewerCount);
+            closePeer(data.viewerId);
+         }
+      }, 5000);
+      return;
+    }
+
+    if (data.type === "viewer-reconnected" && !isViewer) {
+      console.log("[LULE3000] Viewer reconectou ao sinal: " + data.viewerId);
+      const peer = peers.get(data.viewerId);
+      if (!peer || peer.connectionState === "closed" || peer.connectionState === "failed") {
+          viewerCount += 1;
+          viewerCountEl.textContent = String(viewerCount);
+          if (localStream) await createOfferForViewer(data.viewerId);
+      }
+      return;
+    }
+
+    if (data.type === "quality-request" && !isViewer) {
+      handleHostQualityRequest(data.viewerId, data.quality);
+      return;
+    }
+
+    if (data.type === "quality-applied" && isViewer) {
+      if (data.effective !== "FAIL") {
+        document.getElementById("btn-quality").textContent = data.effective;
+        showToast("Qualidade definida para " + data.effective);
+      } else {
+        showToast("Falha ao alterar qualidade.");
+      }
       return;
     }
 
@@ -396,7 +452,7 @@ async function startShare() {
 
     localStream.getTracks().forEach((track) => {
       track.addEventListener("ended", () => {
-        if (!manuallyStopped) stopShare();
+        if (!manuallyStopped && !isSwitchingSource) stopShare();
       });
     });
   } catch (error) {
@@ -455,6 +511,18 @@ async function acceptOffer(offer) {
   if (viewerPeer) viewerPeer.close();
 
   viewerPeer = new RTCPeerConnection(rtcConfig);
+  
+  viewerPeer.addEventListener("connectionstatechange", () => {
+    if (viewerPeer.connectionState === "connected" && isViewer) {
+       startViewerTelemetry();
+    } else if (viewerPeer.connectionState === "disconnected" || viewerPeer.connectionState === "failed") {
+       clearInterval(telemetryTimer);
+       document.getElementById("viewer-status-text").textContent = "CONEXÃO INTERROMPIDA";
+       document.getElementById("viewer-wait-screen").classList.remove("hidden");
+       document.getElementById("viewer-stage").classList.add("hidden");
+    }
+  });
+
 
   viewerPeer.addEventListener("track", (event) => {
     const [stream] = event.streams;
@@ -1058,3 +1126,422 @@ function setupUi() {
 
 setupUi();
 connect();
+
+document.addEventListener("DOMContentLoaded", () => {
+    // 1. Layout Switching
+    const hostView = document.getElementById("host-view");
+    const viewerView = document.getElementById("viewer-view");
+    if (isViewer) {
+        if(hostView) hostView.style.display = "none";
+        if(viewerView) viewerView.style.display = "block";
+        document.body.classList.add("viewer-mode");
+    } else {
+        if(viewerView) viewerView.style.display = "none";
+        if(hostView) hostView.style.display = "block";
+        document.body.classList.add("host-mode");
+    }
+
+    // 2. Intro Animation
+    const introSeq = document.getElementById("intro-sequence");
+    if (introSeq) {
+        if (!sessionStorage.getItem("lule_intro_played")) {
+            setTimeout(() => {
+                introSeq.classList.remove("intro-active");
+                sessionStorage.setItem("lule_intro_played", "true");
+            }, 2000);
+        } else {
+            introSeq.style.display = "none";
+        }
+    }
+
+    // 3. Settings Drawer (Host)
+    const settingsBtn = document.getElementById("settings-btn");
+    const closeSettings = document.getElementById("close-settings");
+    const drawer = document.getElementById("settings-drawer");
+    if (settingsBtn && drawer) {
+        settingsBtn.addEventListener("click", () => drawer.classList.add("open"));
+        closeSettings.addEventListener("click", () => drawer.classList.remove("open"));
+    }
+
+    // 4. Viewer Custom Player UI
+    if (isViewer) {
+        const btnPlayPause = document.getElementById("btn-play-pause");
+        const btnMute = document.getElementById("btn-mute");
+        const volSlider = document.querySelector(".vol-slider");
+        const btnPip = document.getElementById("btn-pip");
+        const btnFullscreenViewer = document.getElementById("btn-fullscreen-viewer");
+        const btnQuality = document.getElementById("btn-quality");
+        const qualityMenu = document.getElementById("quality-menu");
+        
+        // Hide/Show controls on idle
+        const overlay = document.getElementById("player-overlay");
+        let idleTimeout;
+        const resetIdle = () => {
+            if(overlay) overlay.classList.remove("idle");
+            clearTimeout(idleTimeout);
+            idleTimeout = setTimeout(() => {
+                if(overlay) overlay.classList.add("idle");
+            }, 3000);
+        };
+        document.addEventListener("mousemove", resetIdle);
+        document.addEventListener("touchstart", resetIdle);
+        resetIdle();
+
+        if (btnPlayPause) {
+            btnPlayPause.addEventListener("click", () => {
+                if (videoEl.paused) { videoEl.play(); } else { videoEl.pause(); }
+            });
+            videoEl.addEventListener("play", () => {
+                btnPlayPause.querySelector(".icon-play").classList.add("hidden");
+                btnPlayPause.querySelector(".icon-pause").classList.remove("hidden");
+            });
+            videoEl.addEventListener("pause", () => {
+                btnPlayPause.querySelector(".icon-play").classList.remove("hidden");
+                btnPlayPause.querySelector(".icon-pause").classList.add("hidden");
+            });
+        }
+
+        if (btnMute && volSlider) {
+            btnMute.addEventListener("click", () => {
+                videoEl.muted = !videoEl.muted;
+                updateMuteIcon();
+            });
+            volSlider.addEventListener("input", (e) => {
+                videoEl.volume = e.target.value / 100;
+                videoEl.muted = (videoEl.volume === 0);
+                updateMuteIcon();
+                localStorage.setItem("lule_volume", e.target.value);
+            });
+            const savedVol = localStorage.getItem("lule_volume");
+            if (savedVol) {
+                volSlider.value = savedVol;
+                videoEl.volume = savedVol / 100;
+            }
+            function updateMuteIcon() {
+                if (videoEl.muted) {
+                    btnMute.querySelector(".icon-vol").classList.add("hidden");
+                    btnMute.querySelector(".icon-muted").classList.remove("hidden");
+                } else {
+                    btnMute.querySelector(".icon-vol").classList.remove("hidden");
+                    btnMute.querySelector(".icon-muted").classList.add("hidden");
+                }
+            }
+        }
+
+        if (btnPip) {
+            if (!document.pictureInPictureEnabled) {
+                btnPip.style.display = "none";
+            } else {
+                btnPip.addEventListener("click", async () => {
+                    try {
+                        if (document.pictureInPictureElement) {
+                            await document.exitPictureInPicture();
+                        } else if (videoEl.readyState >= 2) {
+                            await videoEl.requestPictureInPicture();
+                        }
+                    } catch (e) { console.warn("PiP error", e); }
+                });
+            }
+        }
+        
+        if (btnFullscreenViewer) {
+            btnFullscreenViewer.addEventListener("click", async () => {
+                const stage = document.getElementById("viewer-stage");
+                if (!document.fullscreenElement) {
+                    await stage.requestFullscreen().catch(err => {
+                        console.error("Erro fullscreen:", err);
+                    });
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+        }
+
+        if (btnQuality && qualityMenu) {
+            btnQuality.addEventListener("click", (e) => {
+                e.stopPropagation();
+                qualityMenu.classList.toggle("hidden");
+            });
+            document.addEventListener("click", () => qualityMenu.classList.add("hidden"));
+            
+            qualityMenu.querySelectorAll(".q-option").forEach(opt => {
+                opt.addEventListener("click", (e) => {
+                    const q = e.currentTarget.dataset.q;
+                    requestQuality(q);
+                    qualityMenu.querySelectorAll(".q-option").forEach(o => o.classList.remove("active"));
+                    e.currentTarget.classList.add("active");
+                });
+            });
+        }
+        
+        // Unmute Overlay behavior
+        const unmuteBtn = document.getElementById("unmute-overlay-btn");
+        if (unmuteBtn) {
+            unmuteBtn.addEventListener("click", () => {
+                videoEl.muted = false;
+                updateMuteIcon && updateMuteIcon();
+                unmuteBtn.style.display = "none";
+            });
+            videoEl.addEventListener("volumechange", () => {
+                if (!videoEl.muted) unmuteBtn.style.display = "none";
+            });
+        }
+    }
+});
+
+function showToast(msg) {
+    const toast = document.getElementById("toast");
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+// 5. Adaptive Quality Protocol
+let currentViewerQuality = "AUTO";
+
+function requestQuality(q) {
+    currentViewerQuality = q;
+    document.getElementById("btn-quality").textContent = q;
+    if (socketIsOpen()) {
+        showToast("Aplicando " + q + "...");
+        socket.send(JSON.stringify({ type: "quality-request", quality: q }));
+    }
+}
+
+async function handleHostQualityRequest(viewerId, quality) {
+    const peer = peers.get(viewerId);
+    if (!peer) return;
+
+    const sender = peer.getSenders().find(s => s.track && s.track.kind === "video");
+    if (!sender) return;
+
+    const parameters = sender.getParameters();
+    if (!parameters.encodings || parameters.encodings.length === 0) {
+        parameters.encodings = [{}];
+    }
+
+    let appliedQuality = quality;
+    const isFirefox = window.navigator.userAgent.indexOf("Firefox") !== -1;
+
+    try {
+        switch (quality) {
+            case "ECONOMY":
+                parameters.encodings[0].maxBitrate = 400000;
+                parameters.encodings[0].maxFramerate = 15;
+                if(!isFirefox) parameters.encodings[0].scaleResolutionDownBy = 3;
+                break;
+            case "480p":
+                parameters.encodings[0].maxBitrate = 800000;
+                parameters.encodings[0].maxFramerate = 24;
+                if(!isFirefox) parameters.encodings[0].scaleResolutionDownBy = 2.25;
+                break;
+            case "720p":
+                parameters.encodings[0].maxBitrate = 2000000;
+                parameters.encodings[0].maxFramerate = 30;
+                if(!isFirefox) parameters.encodings[0].scaleResolutionDownBy = 1.5;
+                break;
+            case "1080p":
+                parameters.encodings[0].maxBitrate = 4000000;
+                parameters.encodings[0].maxFramerate = 30;
+                if(!isFirefox) parameters.encodings[0].scaleResolutionDownBy = 1;
+                break;
+            case "ORIGINAL":
+            case "AUTO":
+            default:
+                delete parameters.encodings[0].maxBitrate;
+                delete parameters.encodings[0].maxFramerate;
+                delete parameters.encodings[0].scaleResolutionDownBy;
+                break;
+        }
+        await sender.setParameters(parameters);
+    } catch (e) {
+        console.warn("Failed to set quality parameters for viewer", viewerId, e);
+        appliedQuality = "FAIL";
+    }
+
+    if (socketIsOpen()) {
+        socket.send(JSON.stringify({
+            type: "quality-applied",
+            viewerId: viewerId,
+            requested: quality,
+            effective: appliedQuality
+        }));
+    }
+}
+
+// 6. Telemetry Engine & Auto Quality Loop
+let telemetryTimer;
+let badStatsCounter = 0;
+let goodStatsCounter = 0;
+
+function startViewerTelemetry() {
+    if (!isViewer) return;
+    clearInterval(telemetryTimer);
+    
+    // Hide wait screen, show player stage
+    document.getElementById("viewer-wait-screen").classList.add("hidden");
+    document.getElementById("viewer-stage").classList.remove("hidden");
+    
+    telemetryTimer = setInterval(async () => {
+        if (!viewerPeer || viewerPeer.connectionState !== "connected") return;
+        
+        try {
+            const stats = await viewerPeer.getStats();
+            let res = "--", fps = "--", bitrate = "--", ping = "--", jitter = "--", loss = "--", codec = "--";
+            let inboundRtp = null, candidatePair = null;
+
+            stats.forEach(report => {
+                if (report.type === "inbound-rtp" && report.kind === "video") inboundRtp = report;
+                if (report.type === "candidate-pair" && report.state === "succeeded") candidatePair = report;
+            });
+
+            if (inboundRtp) {
+                if (inboundRtp.frameWidth) res = inboundRtp.frameWidth + "x" + inboundRtp.frameHeight;
+                if (inboundRtp.framesPerSecond) fps = inboundRtp.framesPerSecond;
+                if (inboundRtp.packetsLost) loss = inboundRtp.packetsLost;
+                if (inboundRtp.jitter) jitter = (inboundRtp.jitter * 1000).toFixed(1) + "ms";
+                
+                if (inboundRtp.codecId) {
+                    const codecReport = stats.get(inboundRtp.codecId);
+                    if (codecReport) codec = codecReport.mimeType.split("/")[1];
+                }
+            }
+
+            if (candidatePair) {
+                if (candidatePair.currentRoundTripTime) ping = (candidatePair.currentRoundTripTime * 1000).toFixed(0) + "ms";
+                if (candidatePair.availableIncomingBitrate) {
+                    bitrate = (candidatePair.availableIncomingBitrate / 1000000).toFixed(2) + " Mbps";
+                }
+            }
+            
+            // Auto quality logic
+            if (currentViewerQuality === "AUTO") {
+                const curPing = candidatePair?.currentRoundTripTime || 0;
+                const curLoss = inboundRtp?.packetsLost || 0;
+                if (curPing > 0.2 || curLoss > 5) {
+                    badStatsCounter++;
+                    goodStatsCounter = 0;
+                    if (badStatsCounter >= 2) { 
+                        requestQuality("480p"); 
+                        setTimeout(() => { if (currentViewerQuality === "480p") requestQuality("AUTO"); }, 30000); 
+                    }
+                } else {
+                    goodStatsCounter++;
+                    badStatsCounter = 0;
+                }
+            }
+
+            document.getElementById("stat-res").textContent = res;
+            document.getElementById("stat-fps").textContent = fps;
+            document.getElementById("stat-bitrate").textContent = bitrate;
+            document.getElementById("stat-ping").textContent = ping;
+            document.getElementById("stat-jitter").textContent = jitter;
+            document.getElementById("stat-loss").textContent = loss;
+            document.getElementById("stat-codec").textContent = codec;
+            
+            const pill = document.getElementById("conn-indicator");
+            const pillText = document.getElementById("conn-text");
+            if (pill && pillText) {
+                pill.className = "connection-pill";
+                const pTime = candidatePair?.currentRoundTripTime || 0;
+                if (pTime < 0.05) { pill.classList.add("excellent"); pillText.textContent = "Excelente"; }
+                else if (pTime < 0.15) { pill.classList.add("good"); pillText.textContent = "Boa"; }
+                else if (pTime < 0.3) { pill.classList.add("poor"); pillText.textContent = "Instável"; }
+                else { pill.classList.add("bad"); pillText.textContent = "Ruim"; }
+                
+                pill.onclick = () => document.getElementById("stats-panel").classList.toggle("hidden");
+            }
+        } catch (e) {}
+    }, 3000);
+}
+
+// --- TROCA DE FONTE SEAMLESS ---
+async function switchDisplaySource() {
+    if (!localStream) return;
+    try {
+        isSwitchingSource = true;
+        const newStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: localStream.getAudioTracks().length > 0 ? true : false
+        });
+
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        if (!newVideoTrack) throw new Error("Sem trilha de video");
+
+        const replacements = [];
+        for (const [viewerId, peer] of peers) {
+            const sender = peer.getSenders().find(s => s.track && s.track.kind === "video");
+            if (sender) {
+                replacements.push(sender.replaceTrack(newVideoTrack).catch(e => console.error("Erro replaceTrack video", e)));
+            }
+        }
+
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        if (newAudioTrack) {
+            for (const [viewerId, peer] of peers) {
+                const audioSender = peer.getSenders().find(s => s.track && s.track.kind === "audio");
+                if (audioSender) {
+                    replacements.push(audioSender.replaceTrack(newAudioTrack).catch(e => console.error("Erro replaceTrack audio", e)));
+                }
+            }
+        }
+
+        await Promise.all(replacements);
+
+        // Desliga video antigo
+        const oldVideoTrack = localStream.getVideoTracks()[0];
+        if (oldVideoTrack) oldVideoTrack.stop();
+        localStream.removeTrack(oldVideoTrack);
+        localStream.addTrack(newVideoTrack);
+
+        // Desliga audio antigo se houver
+        if (newAudioTrack) {
+            const oldAudioTrack = localStream.getAudioTracks()[0];
+            if (oldAudioTrack) {
+                oldAudioTrack.stop();
+                localStream.removeTrack(oldAudioTrack);
+            }
+            localStream.addTrack(newAudioTrack);
+        }
+
+        videoEl.srcObject = localStream;
+        
+        newVideoTrack.addEventListener("ended", () => {
+            if (!manuallyStopped && !isSwitchingSource) stopShare();
+        });
+
+        showToast("Fonte de video alterada com sucesso!");
+    } catch (e) {
+        if (e.name !== 'NotAllowedError') {
+            console.error("Falha ao trocar a fonte:", e);
+            showToast("Falha ao trocar de tela.");
+        }
+    } finally {
+        isSwitchingSource = false;
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btnSwitch = document.getElementById("switch-source");
+    if (btnSwitch) {
+        btnSwitch.addEventListener("click", () => {
+            switchDisplaySource();
+        });
+    }
+
+    // Atualiza visibilidade do botão com base no status do host
+    const originalUpdateHostCaptureState = window.updateHostCaptureState;
+    if (typeof originalUpdateHostCaptureState === "function") {
+        window.updateHostCaptureState = function(newState) {
+            originalUpdateHostCaptureState(newState);
+            if (btnSwitch) {
+                if (newState === CaptureState.STREAMING) {
+                    btnSwitch.style.display = "block";
+                } else {
+                    btnSwitch.style.display = "none";
+                }
+            }
+        };
+    }
+});

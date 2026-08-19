@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import uuid4
+import sys
 
 
 if getattr(sys, 'frozen', False):
@@ -792,8 +793,15 @@ async def handle_ws(ws: WebSocket) -> None:
 
             message_type = data.get("type")
 
+            if message_type == "heartbeat":
+                await ws.send_json({"type": "heartbeat-ack", "timestamp": data.get("timestamp")})
+                continue
+
             if message_type == "join":
                 role = data.get("role")
+                session_id = data.get("sessionId")
+                if session_id:
+                    client_id = session_id
 
                 if role == "host":
                     if HOST and not HOST.closed and HOST is not ws:
@@ -810,20 +818,24 @@ async def handle_ws(ws: WebSocket) -> None:
                     continue
 
                 if role == "viewer":
+                    reconnected = client_id in VIEWERS
                     VIEWERS[client_id] = ws
                     await ws.send_json({"type": "joined", "role": "viewer", "viewerId": client_id})
-                    await send_json(HOST, {"type": "viewer-joined", "viewerId": client_id})
+                    if reconnected:
+                        await send_json(HOST, {"type": "viewer-reconnected", "viewerId": client_id})
+                    else:
+                        await send_json(HOST, {"type": "viewer-joined", "viewerId": client_id})
                     continue
 
                 await ws.send_json({"type": "error", "message": "Papel desconhecido."})
                 continue
 
-            if message_type in {"offer", "host-ice"} and role == "host":
+            if message_type in {"offer", "host-ice", "quality-applied"} and role == "host":
                 viewer = VIEWERS.get(data.get("viewerId", ""))
                 await send_json(viewer, data)
                 continue
 
-            if message_type in {"answer", "viewer-ice"} and role == "viewer":
+            if message_type in {"answer", "viewer-ice", "quality-request"} and role == "viewer":
                 data["viewerId"] = client_id
                 await send_json(HOST, data)
                 continue

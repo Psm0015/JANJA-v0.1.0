@@ -7,7 +7,7 @@ Versao: `v0.1.0`
 <table>
   <tr>
     <td>
-      <a href="releases/JANJA-v0.1.0.zip?raw=1"><strong>Baixar JANJA v0.1.0 (.zip)</strong></a>
+      <a href="https://github.com/Psm0015/JANJA-v0.1.0/raw/main/releases/JANJA-v0.1.0.zip"><strong>Baixar JANJA v0.1.0 (.zip)</strong></a>
     </td>
   </tr>
 </table>

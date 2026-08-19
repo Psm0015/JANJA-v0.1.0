@@ -16,7 +16,10 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import uuid4
 
 
-BASE_DIR = Path(__file__).resolve().parent
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 HELPER_PROJECT = BASE_DIR / "audio-helper" / "AudioHelper.csproj"
 HELPER_DLL = BASE_DIR / "audio-helper" / "bin" / "Release" / "net10.0" / "AudioHelper.dll"
@@ -299,7 +302,7 @@ async def run_audio_helper(*args: str) -> dict[str, Any] | list[Any]:
         error = stderr.decode("utf-8", errors="replace").strip() or stdout.decode("utf-8", errors="replace").strip()
         raise RuntimeError(error or f"Audio helper falhou com codigo {process.returncode}.")
 
-    return json.loads(stdout.decode("utf-8"))
+    return json.loads(stdout.decode("utf-8", errors="replace"))
 
 
 async def serve_audio_apps(writer: asyncio.StreamWriter) -> None:
@@ -344,9 +347,11 @@ async def serve_audio_selection(reader: asyncio.StreamReader, method: str, heade
             raw_body = await reader.readexactly(length) if length else b"{}"
             payload = json.loads(raw_body.decode("utf-8"))
             include_pids = [str(int(pid)) for pid in payload.get("includePids", [])]
+            exclude_pids = [str(int(pid)) for pid in payload.get("excludePids", [])]
             AUDIO_SELECTION = {
-                "enabled": bool(payload.get("enabled")) and (bool(include_pids) or bool(payload.get("mock"))),
+                "enabled": bool(payload.get("enabled")) and (bool(include_pids) or bool(exclude_pids) or bool(payload.get("mock"))),
                 "includePids": include_pids,
+                "excludePids": exclude_pids,
                 "mock": bool(payload.get("mock")),
                 "version": int(AUDIO_SELECTION["version"]) + 1,
             }
@@ -892,6 +897,10 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
         await upgrade_websocket(headers, writer)
         if AUDIO_SELECTION["mock"]:
             await generate_mock_audio(WebSocket(reader, writer), AUDIO_SELECTION["includePids"] or ["101", "202"])
+        elif AUDIO_SELECTION.get("excludePids"):
+            exclude_pids = [str(pid) for pid in AUDIO_SELECTION["excludePids"] if str(pid).isdigit()]
+            if exclude_pids:
+                await stream_single_process_audio(WebSocket(reader, writer), exclude_pids[0], "stream-exclude")
         else:
             include_pids = [str(pid) for pid in AUDIO_SELECTION["includePids"] if str(pid).isdigit()]
             if len(include_pids) == 1:

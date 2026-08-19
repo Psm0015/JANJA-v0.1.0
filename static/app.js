@@ -59,6 +59,22 @@ let remoteAudioGain;
 let remoteAudioSelectionTimer;
 let remoteAudioSelectionKey = "";
 
+const CaptureState = {
+  IDLE: 'IDLE',
+  REQUESTING_CAPTURE: 'REQUESTING_CAPTURE',
+  CAPTURE_ACTIVE: 'CAPTURE_ACTIVE',
+  STREAMING: 'STREAMING',
+  ERROR: 'ERROR'
+};
+let currentCaptureState = CaptureState.IDLE;
+
+const AudioSource = {
+  NONE: 'NONE',
+  BROWSER_DISPLAY_AUDIO: 'BROWSER_DISPLAY_AUDIO',
+  WASAPI_LOOPBACK: 'WASAPI_LOOPBACK'
+};
+let activeAudioSource = AudioSource.NONE;
+
 const rtcConfig = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
@@ -71,16 +87,33 @@ function socketIsOpen() {
   return socket?.readyState === WebSocket.OPEN;
 }
 
+function updateHostCaptureState(newState) {
+  currentCaptureState = newState;
+  if (newState === CaptureState.IDLE) {
+    setStatus("Desconectado");
+    activeAudioSource = AudioSource.NONE;
+  } else if (newState === CaptureState.REQUESTING_CAPTURE) {
+    setStatus("Solicitando captura");
+  } else if (newState === CaptureState.STREAMING) {
+    setStatus("Transmitindo");
+  } else if (newState === CaptureState.ERROR) {
+    // Error status set in startShare
+  }
+}
+
 function refreshHostStatus() {
   if (isViewer) return;
+  if (currentCaptureState === CaptureState.ERROR || currentCaptureState === CaptureState.REQUESTING_CAPTURE) {
+    return; // Handled by state machine
+  }
   if (localStream && socketIsOpen()) {
-    setStatus("Transmitindo");
+    updateHostCaptureState(CaptureState.STREAMING);
   } else if (localStream) {
     setStatus("Reconectando");
   } else if (socketIsOpen()) {
     setStatus("Conectado");
   } else {
-    setStatus("Desconectado");
+    updateHostCaptureState(CaptureState.IDLE);
   }
 }
 
@@ -105,34 +138,19 @@ function stopStreamAudioTracks() {
   });
 }
 
-function displayCaptureOptions(audioMode) {
-  const wantsBrowserAudio = audioMode === "tab" || audioMode === "screen";
-  const options = {
-    video: { frameRate: 30 },
-    audio: wantsBrowserAudio,
-  };
-
-  if (audioMode === "tab") {
-    options.preferCurrentTab = true;
-    options.surfaceSwitching = "include";
-  }
-
-  return options;
-}
-
 async function captureDisplayStream(audioMode) {
   try {
-    return await navigator.mediaDevices.getDisplayMedia(displayCaptureOptions(audioMode));
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: audioMode !== "none" && audioMode !== "screen-no-discord"
+    });
   } catch (error) {
-    const constraintFailed = ["TypeError", "OverconstrainedError", "NotFoundError"].includes(error.name);
-
-    if (audioMode === "tab" && constraintFailed) {
-      return navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30 },
-        audio: true,
+    if (error.name === "TypeError" || error.name === "NotSupportedError") {
+      console.warn("[LULE3000 CAPTURE FALLBACK] Navegador recusou audio: true (ex: Firefox). Tentando apenas video...", error.name);
+      return await navigator.mediaDevices.getDisplayMedia({
+        video: true
       });
     }
-
     throw error;
   }
 }
@@ -269,13 +287,40 @@ function connect() {
 }
 
 async function startShare() {
+  if (currentCaptureState === CaptureState.REQUESTING_CAPTURE || currentCaptureState === CaptureState.STREAMING) {
+    return;
+  }
+
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      throw new Error("getDisplayMedia não suportado ou contexto não seguro (precisa de HTTPS ou localhost).");
+    }
+
     manuallyStopped = false;
+    updateHostCaptureState(CaptureState.REQUESTING_CAPTURE);
     const audioMode = audioModeSelect.value;
     stopFilteredAudio();
-    await publishAudioSelection([]);
+    
+    if (audioMode === "screen-no-discord") {
+      await loadAudioApps();
+      const discordApp = latestAudioApps.find(app => app.Name.toLowerCase().includes("discord"));
+      const excludePids = discordApp ? [discordApp.ProcessId] : [];
+      if (!discordApp) console.warn("[LULE3000] Discord não encontrado na lista de apps de áudio.");
+      await publishAudioSelection([], excludePids);
+    } else {
+      await publishAudioSelection([]);
+    }
 
     localStream = await captureDisplayStream(audioMode);
+
+    const videoTracks = localStream.getVideoTracks();
+    if (videoTracks.length > 0) {
+      try {
+        await videoTracks[0].applyConstraints({ frameRate: { ideal: 30 } });
+      } catch (e) {
+        console.warn("[LULE3000 CAPTURE] Não foi possível otimizar para 30 FPS", e);
+      }
+    }
 
     if (audioMode === "input") {
       const deviceId = audioDeviceSelect.value;
@@ -285,9 +330,29 @@ async function startShare() {
       await loadAudioInputs();
     }
 
+    if (localStream.getAudioTracks().length > 0) {
+      activeAudioSource = AudioSource.BROWSER_DISPLAY_AUDIO;
+      console.log("[LULE3000 CAPTURE] Usando áudio nativo do navegador.");
+    } else if (audioMode !== "none") {
+      console.log("[LULE3000 CAPTURE] Áudio nativo indisponível. Tentando WASAPI...");
+      try {
+        const audioTrack = await createFilteredAudioTrack();
+        if (audioTrack) {
+          localStream.addTrack(audioTrack);
+          activeAudioSource = AudioSource.WASAPI_LOOPBACK;
+          console.log("[LULE3000 CAPTURE] Áudio WASAPI conectado com sucesso.");
+        }
+      } catch (err) {
+        activeAudioSource = AudioSource.NONE;
+        console.warn("[LULE3000 CAPTURE] WASAPI fallback nao disponivel", err);
+      }
+    }
+
+    updateHostCaptureState(CaptureState.CAPTURE_ACTIVE);
+
     videoEl.srcObject = localStream;
     setEmpty(false);
-    refreshHostStatus();
+    updateHostCaptureState(CaptureState.STREAMING);
     startButton.disabled = true;
     stopButton.disabled = false;
 
@@ -296,20 +361,24 @@ async function startShare() {
         if (!manuallyStopped) stopShare();
       });
     });
-
-    if (audioMode !== "none" && localStream.getAudioTracks().length === 0) {
-      setStatus("Sem audio");
-    }
   } catch (error) {
-    console.error("Falha ao iniciar captura", error);
-    const denied = error.name === "NotAllowedError" || error.name === "SecurityError";
+    console.error("[LULE3000 CAPTURE ERROR]\n",
+      "name:", error.name, "\n",
+      "message:", error.message, "\n",
+      "constraint:", error.constraint, "\n",
+      "secureContext:", window.isSecureContext, "\n",
+      "documentFocused:", document.hasFocus(), "\n",
+      "userAgent:", navigator.userAgent
+    );
+    updateHostCaptureState(CaptureState.ERROR);
+    const denied = error.name === "NotAllowedError" || error.name === "SecurityError" || error.name === "PermissionDeniedError";
     setStatus(denied ? "Permissao negada" : "Captura bloqueada");
     setEmpty(
       true,
       denied ? "Captura cancelada" : "Captura indisponivel",
       denied
         ? "O navegador precisa da sua permissao para compartilhar a tela."
-        : "O navegador recusou essa configuracao de captura. Tente novamente com Escolher tela/janela/guia."
+        : `O navegador recusou a configuração (${error.name}). Tente novamente com Escolher tela/janela/guia.`
     );
   }
 }
@@ -352,12 +421,16 @@ async function acceptOffer(offer) {
   viewerPeer.addEventListener("track", (event) => {
     const [stream] = event.streams;
     videoEl.srcObject = stream;
-    applyViewerVolume();
     setEmpty(false);
-    setStatus(stream.getAudioTracks().length > 0 ? "Assistindo" : "Sem audio");
-    videoEl.play().catch(() => {
-      setStatus("Clique no video");
-    });
+    
+    const hasAudio = stream.getAudioTracks().length > 0;
+    setStatus(hasAudio ? "Assistindo" : "Vídeo sem áudio");
+
+    if (isViewer) {
+      const unmuteBtn = document.querySelector("#unmute-overlay-btn");
+      if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
+      enableViewerAudio();
+    }
   });
 
   viewerPeer.addEventListener("icecandidate", (event) => {
@@ -436,27 +509,60 @@ function syncFullscreenButton() {
   fullscreenButton.textContent = fullscreenElement ? "Sair da tela cheia" : "Tela cheia";
 }
 
+function setViewerVolume(val) {
+  if (!isViewer) return;
+  const volRatio = val / 100;
+  videoEl.volume = volRatio;
+  if (remoteAudioGain) {
+    remoteAudioGain.gain.value = volRatio;
+  }
+}
+
+function setViewerMuted(isMuted) {
+  if (!isViewer) return;
+  videoEl.muted = isMuted;
+}
+
 function applyViewerVolume() {
   const volume = Number(volumeInput.value);
   volumeValue.textContent = `${volume}%`;
-  videoEl.volume = volume / 100;
-  videoEl.muted = !isViewer || volume === 0;
-  videoEl.defaultMuted = !isViewer || volume === 0;
-  if (isViewer && volume > 0) {
-    videoEl.removeAttribute("muted");
+  
+  if (isViewer) {
+    setViewerVolume(volume);
+    setViewerMuted(volume === 0);
+  } else {
+    videoEl.muted = true;
+  }
+}
+
+async function enableViewerAudio() {
+  if (!isViewer) return;
+
+  const volume = Number(volumeInput.value);
+  if (volume === 0) {
+    volumeInput.value = 85;
+    volumeValue.textContent = "85%";
+  }
+
+  setViewerVolume(Number(volumeInput.value));
+  setViewerMuted(false);
+  remoteAudioContext?.resume();
+
+  const unmuteBtn = document.querySelector("#unmute-overlay-btn");
+
+  try {
+    await videoEl.play();
+    if (unmuteBtn) unmuteBtn.style.display = "none";
+    setStatus("Assistindo");
+  } catch (err) {
+    console.warn("[LULE3000 AUDIO PLAY ERROR]", err);
+    if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
+    setStatus("Clique no video para ouvir");
   }
 }
 
 function syncVolume() {
-  applyViewerVolume();
-  filteredAudioPlayer.volume = Number(volumeInput.value) / 100;
-  if (remoteAudioGain) {
-    remoteAudioGain.gain.value = Number(volumeInput.value) / 100;
-  }
-  remoteAudioContext?.resume();
-  videoEl.play().catch(() => {
-    if (isViewer && videoEl.srcObject) setStatus("Clique no video");
-  });
+  enableViewerAudio();
 }
 
 async function loadRemoteAudioSelection() {
@@ -650,7 +756,7 @@ async function applyAudioSelectionToActiveStream() {
   updateMixerStatus();
 }
 
-async function publishAudioSelection(includePids) {
+async function publishAudioSelection(includePids, excludePids = []) {
   if (isViewer) return;
 
   try {
@@ -658,8 +764,9 @@ async function publishAudioSelection(includePids) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        enabled: includePids.length > 0,
+        enabled: includePids.length > 0 || excludePids.length > 0,
         includePids,
+        excludePids,
         mock: params.get("mockAudio") === "1",
       }),
     });

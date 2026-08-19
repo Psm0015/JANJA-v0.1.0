@@ -36,12 +36,15 @@ static (string FileName, string ArgumentsPrefix)? FindPython()
         return (envPython, "");
     }
 
+    var userProfile = Environment.GetEnvironmentVariable("USERPROFILE")
+        ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
     var localPythonCandidates = new[]
     {
         Path.Combine(AppDir(), "runtime", "python", "python.exe"),
         Path.Combine(AppDir(), "python", "python.exe"),
         Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            userProfile,
             ".cache",
             "codex-runtimes",
             "codex-primary-runtime",
@@ -52,7 +55,7 @@ static (string FileName, string ArgumentsPrefix)? FindPython()
 
     foreach (var candidate in localPythonCandidates)
     {
-        if (File.Exists(candidate) && IsPythonReady(candidate, "--version"))
+        if (File.Exists(candidate))
         {
             return (candidate, "");
         }

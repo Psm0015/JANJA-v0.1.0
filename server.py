@@ -9,6 +9,7 @@ import shutil
 import socket
 import struct
 import math
+import sys
 import webbrowser
 from pathlib import Path
 from typing import Any

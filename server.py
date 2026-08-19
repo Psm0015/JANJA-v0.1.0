@@ -38,6 +38,7 @@ TUNNEL_INFO: dict[str, Any] = {
 AUDIO_SELECTION: dict[str, Any] = {
     "enabled": False,
     "includePids": [],
+    "excludePids": [],
     "mock": False,
     "version": 0,
 }
@@ -314,6 +315,31 @@ async def serve_audio_apps(writer: asyncio.StreamWriter) -> None:
     except Exception as exc:
         body = json.dumps({"ok": False, "message": str(exc)}).encode("utf-8")
         writer.write(http_response("500 Internal Server Error", body, "application/json"))
+
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+
+
+async def serve_audio_capabilities(writer: asyncio.StreamWriter) -> None:
+    try:
+        capabilities = await run_audio_helper("capabilities")
+        body = json.dumps({
+            "ok": True,
+            **capabilities,
+            "processLoopbackSupported": bool(capabilities.get("ProcessLoopbackSupported")),
+            "minimumProcessLoopbackBuild": capabilities.get("MinimumProcessLoopbackBuild"),
+            "currentBuild": capabilities.get("CurrentBuild"),
+            "message": capabilities.get("Message"),
+        }).encode("utf-8")
+        writer.write(http_response("200 OK", body, "application/json"))
+    except Exception as exc:
+        body = json.dumps({
+            "ok": False,
+            "processLoopbackSupported": False,
+            "message": str(exc),
+        }).encode("utf-8")
+        writer.write(http_response("200 OK", body, "application/json"))
 
     await writer.drain()
     writer.close()
@@ -831,6 +857,10 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
 
     if method == "GET" and path == "/audio/apps":
         await serve_audio_apps(writer)
+        return
+
+    if method == "GET" and path == "/audio/capabilities":
+        await serve_audio_capabilities(writer)
         return
 
     if method == "GET" and path in {"/audio-current.wav", "/audio-preview.wav"}:

@@ -58,6 +58,7 @@ let remoteAudioWorkletNode;
 let remoteAudioGain;
 let remoteAudioSelectionTimer;
 let remoteAudioSelectionKey = "";
+let audioCapabilities;
 
 const CaptureState = {
   IDLE: 'IDLE',
@@ -146,13 +147,30 @@ async function captureDisplayStream(audioMode) {
     });
   } catch (error) {
     if (error.name === "TypeError" || error.name === "NotSupportedError") {
-      console.warn("[LULE3000 CAPTURE FALLBACK] Navegador recusou audio: true (ex: Firefox). Tentando apenas video...", error.name);
+      console.warn("[JANJA CAPTURE FALLBACK] Navegador recusou audio: true (ex: Firefox). Tentando apenas video...", error.name);
       return await navigator.mediaDevices.getDisplayMedia({
         video: true
       });
     }
     throw error;
   }
+}
+
+async function loadAudioCapabilities() {
+  if (audioCapabilities) return audioCapabilities;
+
+  try {
+    const response = await fetch("/audio/capabilities", { cache: "no-store" });
+    audioCapabilities = await response.json();
+  } catch (error) {
+    audioCapabilities = {
+      ok: false,
+      processLoopbackSupported: false,
+      message: "Nao foi possivel detectar suporte ao filtro de audio por processo.",
+    };
+  }
+
+  return audioCapabilities;
 }
 
 function updateMixerStatus() {
@@ -299,14 +317,26 @@ async function startShare() {
     manuallyStopped = false;
     updateHostCaptureState(CaptureState.REQUESTING_CAPTURE);
     const audioMode = audioModeSelect.value;
+    let canUseWasapiLoopback = true;
+    let compatibilityMessage = "";
     stopFilteredAudio();
     
     if (audioMode === "screen-no-discord") {
-      await loadAudioApps();
-      const discordApp = latestAudioApps.find(app => app.Name.toLowerCase().includes("discord"));
-      const excludePids = discordApp ? [discordApp.ProcessId] : [];
-      if (!discordApp) console.warn("[LULE3000] Discord não encontrado na lista de apps de áudio.");
-      await publishAudioSelection([], excludePids);
+      const capabilities = await loadAudioCapabilities();
+      canUseWasapiLoopback = Boolean(capabilities.processLoopbackSupported || capabilities.ProcessLoopbackSupported) ||
+        params.get("mockAudio") === "1";
+
+      if (canUseWasapiLoopback) {
+        await loadAudioApps();
+        const discordApp = latestAudioApps.find(app => app.Name.toLowerCase().includes("discord"));
+        const excludePids = discordApp ? [discordApp.ProcessId] : [];
+        if (!discordApp) console.warn("[JANJA] Discord não encontrado na lista de apps de áudio.");
+        await publishAudioSelection([], excludePids);
+      } else {
+        compatibilityMessage = capabilities.message || capabilities.Message ||
+          "Esta versao do Windows nao suporta filtro de audio por aplicativo. O video sera transmitido sem audio para nao vazar Discord.";
+        await publishAudioSelection([]);
+      }
     } else {
       await publishAudioSelection([]);
     }
@@ -318,7 +348,7 @@ async function startShare() {
       try {
         await videoTracks[0].applyConstraints({ frameRate: { ideal: 30 } });
       } catch (e) {
-        console.warn("[LULE3000 CAPTURE] Não foi possível otimizar para 30 FPS", e);
+        console.warn("[JANJA CAPTURE] Não foi possível otimizar para 30 FPS", e);
       }
     }
 
@@ -332,20 +362,25 @@ async function startShare() {
 
     if (localStream.getAudioTracks().length > 0) {
       activeAudioSource = AudioSource.BROWSER_DISPLAY_AUDIO;
-      console.log("[LULE3000 CAPTURE] Usando áudio nativo do navegador.");
-    } else if (audioMode !== "none") {
-      console.log("[LULE3000 CAPTURE] Áudio nativo indisponível. Tentando WASAPI...");
+      console.log("[JANJA CAPTURE] Usando áudio nativo do navegador.");
+    } else if (audioMode !== "none" && canUseWasapiLoopback) {
+      console.log("[JANJA CAPTURE] Áudio nativo indisponível. Tentando WASAPI...");
       try {
         const audioTrack = await createFilteredAudioTrack();
         if (audioTrack) {
           localStream.addTrack(audioTrack);
           activeAudioSource = AudioSource.WASAPI_LOOPBACK;
-          console.log("[LULE3000 CAPTURE] Áudio WASAPI conectado com sucesso.");
+          console.log("[JANJA CAPTURE] Áudio WASAPI conectado com sucesso.");
         }
       } catch (err) {
         activeAudioSource = AudioSource.NONE;
-        console.warn("[LULE3000 CAPTURE] WASAPI fallback nao disponivel", err);
+        console.warn("[JANJA CAPTURE] WASAPI fallback nao disponivel", err);
       }
+    } else if (compatibilityMessage) {
+      activeAudioSource = AudioSource.NONE;
+      audioPanel.style.display = "grid";
+      audioPanelLabel.textContent = "Compatibilidade de audio";
+      audioPanelStatus.textContent = compatibilityMessage;
     }
 
     updateHostCaptureState(CaptureState.CAPTURE_ACTIVE);
@@ -353,6 +388,9 @@ async function startShare() {
     videoEl.srcObject = localStream;
     setEmpty(false);
     updateHostCaptureState(CaptureState.STREAMING);
+    if (compatibilityMessage) {
+      setStatus("Video sem audio");
+    }
     startButton.disabled = true;
     stopButton.disabled = false;
 
@@ -362,7 +400,7 @@ async function startShare() {
       });
     });
   } catch (error) {
-    console.error("[LULE3000 CAPTURE ERROR]\n",
+    console.error("[JANJA CAPTURE ERROR]\n",
       "name:", error.name, "\n",
       "message:", error.message, "\n",
       "constraint:", error.constraint, "\n",
@@ -555,7 +593,7 @@ async function enableViewerAudio() {
     if (unmuteBtn) unmuteBtn.style.display = "none";
     setStatus("Assistindo");
   } catch (err) {
-    console.warn("[LULE3000 AUDIO PLAY ERROR]", err);
+    console.warn("[JANJA AUDIO PLAY ERROR]", err);
     if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
     setStatus("Clique no video para ouvir");
   }

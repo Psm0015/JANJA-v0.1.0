@@ -4,6 +4,14 @@
 
 Versao: `v0.1.0`
 
+<table>
+  <tr>
+    <td>
+      <a href="releases/JANJA-v0.1.0.zip?raw=1"><strong>Baixar JANJA v0.1.0 (.zip)</strong></a>
+    </td>
+  </tr>
+</table>
+
 MVP em Python para compartilhar a tela pelo navegador usando WebRTC. O Python serve a pagina e faz a sinalizacao por WebSocket; o video vai direto entre navegadores quando a rede permite.
 
 Nao precisa instalar bibliotecas externas.
@@ -15,6 +23,8 @@ Pelo executavel:
 ```powershell
 .\JANJA.exe
 ```
+
+Mantenha o `cloudflared.exe` na mesma pasta do `JANJA.exe`. Ele e usado para criar o link publico do Cloudflare Tunnel.
 
 Ou pelo Python:
 

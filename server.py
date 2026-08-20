@@ -31,6 +31,26 @@ HOST: "WebSocket | None" = None
 VIEWERS: dict[str, "WebSocket"] = {}
 VIEWER_METADATA: dict[str, dict[str, Any]] = {}
 CLOUDFLARED_PROCESS: "asyncio.subprocess.Process | None" = None
+
+BANS_FILE = BASE_DIR / "hermes_bans.json"
+
+def load_bans() -> dict[str, dict[str, Any]]:
+    if BANS_FILE.exists():
+        try:
+            with open(BANS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_bans(bans: dict[str, dict[str, Any]]) -> None:
+    try:
+        with open(BANS_FILE, "w", encoding="utf-8") as f:
+            json.dump(bans, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"[HERMES] Error saving bans: {e}")
+
+BANNED_CLIENTS: dict[str, dict[str, Any]] = load_bans()
 TUNNEL_INFO: dict[str, Any] = {
     "status": "stopped",
     "url": None,
@@ -818,17 +838,32 @@ async def handle_ws(ws: WebSocket) -> None:
                             VIEWER_METADATA.pop(viewer_id, None)
                             continue
                         meta = VIEWER_METADATA.get(viewer_id, {})
-                        viewer_list.append({"viewerId": viewer_id, "nickname": meta.get("nickname", "Espectador")})
+                        viewer_list.append({
+                            "viewerId": viewer_id,
+                            "nickname": meta.get("nickname", "Espectador"),
+                            "clientId": meta.get("clientId", viewer_id),
+                            "connectedAt": meta.get("connectedAt", time.time()),
+                            "stats": meta.get("stats", {})
+                        })
                     await ws.send_json({"type": "viewer-list", "viewers": viewer_list})
+                    await ws.send_json({"type": "banned-list", "banned": BANNED_CLIENTS})
                     continue
 
                 if role == "viewer":
+                    tech_id = data.get("clientId") or client_id
+                    if tech_id in BANNED_CLIENTS or client_id in BANNED_CLIENTS:
+                        await ws.send_json({"type": "join-rejected", "reason": "banned"})
+                        await ws.close()
+                        return
+
                     nickname = (data.get("nickname") or "").strip()[:24] or "Espectador"
                     reconnected = client_id in VIEWERS
                     VIEWERS[client_id] = ws
                     VIEWER_METADATA[client_id] = {
                         "nickname": nickname,
-                        "connectedAt": time.time()
+                        "clientId": tech_id,
+                        "connectedAt": time.time(),
+                        "stats": {}
                     }
                     await ws.send_json({"type": "joined", "role": "viewer", "viewerId": client_id, "nickname": nickname})
                     msg_type = "viewer-reconnected" if reconnected else "viewer-joined"
@@ -836,6 +871,7 @@ async def handle_ws(ws: WebSocket) -> None:
                         "type": msg_type,
                         "viewerId": client_id,
                         "nickname": nickname,
+                        "clientId": tech_id,
                         "count": len(VIEWERS)
                     })
                     continue
@@ -854,6 +890,56 @@ async def handle_ws(ws: WebSocket) -> None:
                         "viewerId": client_id,
                         "nickname": new_nick
                     })
+                continue
+
+            if message_type == "kick-viewer" and role == "host":
+                target_id = data.get("viewerId", "")
+                target_ws = VIEWERS.get(target_id)
+                if target_ws:
+                    await send_json(target_ws, {"type": "viewer-kicked"})
+                    await target_ws.close()
+                await ws.send_json({"type": "viewer-kicked-ack", "viewerId": target_id})
+                continue
+
+            if message_type == "ban-viewer" and role == "host":
+                target_id = data.get("viewerId", "")
+                reason = data.get("reason", "")
+                meta = VIEWER_METADATA.get(target_id, {})
+                target_client_id = meta.get("clientId", target_id)
+                nick = meta.get("nickname", "Espectador")
+
+                BANNED_CLIENTS[target_client_id] = {
+                    "nickname": nick,
+                    "bannedAt": time.time(),
+                    "reason": reason
+                }
+                save_bans(BANNED_CLIENTS)
+
+                target_ws = VIEWERS.get(target_id)
+                if target_ws:
+                    await send_json(target_ws, {"type": "viewer-banned"})
+                    await target_ws.close()
+
+                await ws.send_json({"type": "banned-list", "banned": BANNED_CLIENTS})
+                continue
+
+            if message_type == "unban-client" and role == "host":
+                target_client_id = data.get("clientId", "")
+                if target_client_id in BANNED_CLIENTS:
+                    BANNED_CLIENTS.pop(target_client_id, None)
+                    save_bans(BANNED_CLIENTS)
+                await ws.send_json({"type": "banned-list", "banned": BANNED_CLIENTS})
+                continue
+
+            if message_type == "viewer-stats" and role == "viewer":
+                stats = data.get("stats", {})
+                if client_id in VIEWER_METADATA:
+                    VIEWER_METADATA[client_id]["stats"] = stats
+                await send_json(HOST, {
+                    "type": "viewer-telemetry",
+                    "viewerId": client_id,
+                    "stats": stats
+                })
                 continue
 
             if message_type in {"offer", "host-ice", "quality-applied"} and role == "host":

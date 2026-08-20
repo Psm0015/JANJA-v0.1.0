@@ -1198,6 +1198,226 @@ select:focus, input[type="text"]:focus {
 .stats-grid strong { color: var(--violet-light); }
 
 /* --------------------------------------------------------------------------
+   8b. HOST VIDEO STAGE HUD OVERLAY
+   -------------------------------------------------------------------------- */
+.host-hud-overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: rgba(7, 4, 13, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  z-index: 12;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+.host-hud-overlay.hidden { display: none; }
+
+.hud-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+}
+
+.hud-item span {
+  color: var(--muted);
+}
+
+.hud-item strong {
+  color: var(--violet-light);
+}
+
+.hud-item + .hud-item::before {
+  content: "•";
+  color: rgba(139, 92, 246, 0.4);
+  margin-right: 2px;
+}
+
+/* Spectator Item Action Buttons & Badges */
+.spectator-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spectator-ping-badge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--cyan-accent);
+  background: rgba(34, 211, 238, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+}
+
+.spectator-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+
+.spectator-menu-btn:hover {
+  color: var(--white);
+  background: rgba(139, 92, 246, 0.2);
+}
+
+/* Spectator Details Modal */
+.details-card {
+  max-width: 480px;
+}
+
+.avatar-lg {
+  width: 48px;
+  height: 48px;
+  font-size: 1.2rem;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  font-family: var(--font-mono);
+}
+
+.t-item {
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 10, 32, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.t-item span {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.t-item strong {
+  font-size: 0.85rem;
+  color: var(--violet-light);
+}
+
+.space-between {
+  justify-content: space-between;
+}
+
+.action-danger-group {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-warning-alt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 209, 102, 0.1);
+  border: 1px solid rgba(255, 209, 102, 0.4);
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+}
+
+.btn-warning-alt:hover:not(:disabled) {
+  background: var(--warning);
+  color: #000;
+}
+
+.margin-top-md {
+  margin-top: 16px;
+}
+
+/* Moderation Banned List */
+.banned-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.banned-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 59, 92, 0.08);
+  border: 1px solid rgba(255, 59, 92, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.banned-name {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Checkbox Controls & HUD Grid */
+.checkbox-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--white);
+  cursor: pointer;
+}
+
+.checkbox-control input[type="checkbox"] {
+  accent-color: var(--violet);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.hud-toggles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+  padding-left: 8px;
+}
+
+.btn-icon-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* Layout Truncation Guards */
+.copy-row input {
+  min-width: 0;
+}
+
+.spectator-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+
+/* --------------------------------------------------------------------------
    11. TOAST SYSTEM
    -------------------------------------------------------------------------- */
 .toast {
@@ -1232,30 +1452,70 @@ select:focus, input[type="text"]:focus {
 /* --------------------------------------------------------------------------
    12. RESPONSIVE BREAKPOINTS
    -------------------------------------------------------------------------- */
-@media (max-width: 992px) {
+@media (min-width: 1201px) {
   .machine-grid {
-    grid-template-columns: 1fr;
-  }
-  .stage {
-    min-height: 380px;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
   }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 1200px) and (min-width: 769px) {
+  .machine-grid {
+    grid-template-columns: 1fr;
+  }
+  .side-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .control-deck-card {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
   .hermes-shell {
     padding: 12px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
+
   .topbar {
     padding: 10px 14px;
   }
+
   .node-id-tag {
     display: none;
   }
+
+  .machine-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
   .stage {
     min-height: 240px;
   }
+
+  .copy-row {
+    flex-wrap: wrap;
+  }
+
+  .copy-row .btn-secondary {
+    flex: 1;
+  }
+
   .control-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Form iOS auto-zoom prevention */
+  input[type="text"], select {
+    font-size: 16px !important;
+  }
+
+  /* Touch Target minimums */
+  button, .btn-icon, .spectator-menu-btn {
+    min-height: 44px;
   }
 }
 
@@ -1264,3 +1524,4 @@ select:focus, input[type="text"]:focus {
     animation: none !important;
   }
 }
+

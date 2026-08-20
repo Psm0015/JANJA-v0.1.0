@@ -97,7 +97,20 @@ function socketIsOpen() {
 }
 
 const spectatorMap = new Map();
+let bannedClientsMap = {};
+let selectedSpectatorId = null;
+
+let viewerClientId = localStorage.getItem("hermes_client_id");
+if (!viewerClientId) {
+    viewerClientId = Array.from(crypto.getRandomValues(new Uint32Array(4))).map(b => b.toString(16).padStart(8, '0')).join('');
+    localStorage.setItem("hermes_client_id", viewerClientId);
+}
+
 let viewerNickname = localStorage.getItem("hermes_viewer_nickname") || "";
+let manuallyKicked = false;
+let manuallyBanned = false;
+let viewerLastBytes = 0;
+let viewerLastTimestamp = 0;
 
 const AVATAR_PALETTE = ['#7c3aed', '#8b5cf6', '#d946ef', '#22d3ee', '#4c1d95', '#a78bfa', '#ff3b5c', '#46f0a0'];
 
@@ -132,17 +145,103 @@ function renderSpectatorList() {
     const initial = nick.charAt(0).toUpperCase();
     const bg = getAvatarColor(nick);
     const safeNick = escapeHtml(nick);
+    const pingHtml = (v.stats && v.stats.rtt) ? `<span class="spectator-ping-badge">${v.stats.rtt}ms</span>` : '';
     html += `
       <div class="spectator-item" id="spectator-${id}">
         <div class="spectator-info">
           <div class="avatar-circle" style="background-color: ${bg};">${initial}</div>
-          <span class="spectator-name">${safeNick}</span>
+          <span class="spectator-name" title="${safeNick}">${safeNick}</span>
         </div>
-        <div class="spectator-status-dot" title="Conectado"></div>
+        <div class="spectator-item-right">
+          ${pingHtml}
+          <button class="spectator-menu-btn" title="Detalhes / Moderação" onclick="openSpectatorDetails('${id}')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+          </button>
+        </div>
       </div>
     `;
   });
   container.innerHTML = html;
+}
+
+function openSpectatorDetails(viewerId) {
+  selectedSpectatorId = viewerId;
+  const spectator = spectatorMap.get(viewerId);
+  if (!spectator) return;
+
+  const modal = document.getElementById("spectator-details-modal");
+  const avatarEl = document.getElementById("details-avatar");
+  const nickEl = document.getElementById("details-nickname");
+  
+  if (nickEl) nickEl.textContent = spectator.nickname || "Espectador";
+  if (avatarEl) {
+    const initial = (spectator.nickname || "E").charAt(0).toUpperCase();
+    avatarEl.textContent = initial;
+    avatarEl.style.backgroundColor = getAvatarColor(spectator.nickname || viewerId);
+  }
+
+  updateSpectatorDetailsModalIfOpen(viewerId);
+  if (modal) modal.classList.remove("hidden");
+}
+
+function updateSpectatorDetailsModalIfOpen(viewerId) {
+  if (selectedSpectatorId !== viewerId) return;
+  const spectator = spectatorMap.get(viewerId);
+  if (!spectator) return;
+
+  const stats = spectator.stats || {};
+  const detRtt = document.getElementById("det-rtt");
+  const detBitrate = document.getElementById("det-bitrate");
+  const detFps = document.getElementById("det-fps");
+  const detRes = document.getElementById("det-res");
+  const detQuality = document.getElementById("det-quality");
+  const detJitter = document.getElementById("det-jitter");
+  const detLoss = document.getElementById("det-loss");
+  const detUptime = document.getElementById("det-uptime");
+
+  if (detRtt) detRtt.textContent = stats.rtt ? `${stats.rtt} ms` : "--";
+  if (detBitrate) detBitrate.textContent = stats.bitrate ? `${stats.bitrate} Mbps` : "--";
+  if (detFps) detFps.textContent = stats.fps ? `${stats.fps} FPS` : "--";
+  if (detRes) detRes.textContent = stats.res || "--";
+  if (detQuality) detQuality.textContent = stats.quality || "AUTO";
+  if (detJitter) detJitter.textContent = stats.jitter ? `${stats.jitter} ms` : "--";
+  if (detLoss) detLoss.textContent = stats.loss !== undefined ? `${stats.loss}` : "--";
+  
+  if (detUptime && spectator.connectedAt) {
+    const secs = Math.floor((Date.now() / 1000) - spectator.connectedAt);
+    const mins = Math.floor(secs / 60);
+    detUptime.textContent = mins > 0 ? `${mins}m ${secs % 60}s` : `${secs}s`;
+  }
+}
+
+function renderBannedList() {
+  const container = document.getElementById("banned-list-container");
+  if (!container) return;
+  const keys = Object.keys(bannedClientsMap);
+  if (keys.length === 0) {
+    container.innerHTML = '<span class="status-text">Nenhum usuário banido.</span>';
+    return;
+  }
+
+  let html = '';
+  keys.forEach(cId => {
+    const info = bannedClientsMap[cId] || {};
+    const name = escapeHtml(info.nickname || "Cliente");
+    html += `
+      <div class="banned-item">
+        <span class="banned-name">${name}</span>
+        <button class="btn-secondary btn-sm" onclick="unbanClient('${cId}')">DESBANIR</button>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+function unbanClient(clientId) {
+  if (socketIsOpen()) {
+    send({ type: "unban-client", clientId });
+    showToast("Solicitação de desbanimento enviada.", "info");
+  }
 }
 
 function checkViewerOnboarding() {
@@ -236,6 +335,7 @@ function updateHostCaptureState(newState) {
   } else if (newState === CaptureState.ERROR) {
     // Error status set in startShare
   }
+  updateHostVideoHud();
 }
 
 function refreshHostStatus() {
@@ -251,6 +351,48 @@ function refreshHostStatus() {
     setStatus("CONECTADO");
   } else {
     updateHostCaptureState(CaptureState.IDLE);
+  }
+}
+
+function updateHostVideoHud() {
+  const hudOverlay = document.getElementById("host-hud-overlay");
+  if (!hudOverlay) return;
+
+  const enabled = localStorage.getItem("hermes_hud_enable") !== "false";
+  if (!enabled || currentCaptureState !== CaptureState.STREAMING || spectatorMap.size === 0) {
+    hudOverlay.classList.add("hidden");
+    return;
+  }
+  hudOverlay.classList.remove("hidden");
+
+  let maxFps = 0, totalBitrate = 0, avgRtt = 0, rttCount = 0, maxJitter = 0, maxLoss = 0, resStr = "--";
+  spectatorMap.forEach(v => {
+    if (v.stats) {
+      if (v.stats.fps) maxFps = Math.max(maxFps, v.stats.fps);
+      if (v.stats.bitrate) totalBitrate += v.stats.bitrate;
+      if (v.stats.rtt) { avgRtt += v.stats.rtt; rttCount++; }
+      if (v.stats.jitter) maxJitter = Math.max(maxJitter, v.stats.jitter);
+      if (v.stats.loss) maxLoss = Math.max(maxLoss, v.stats.loss);
+      if (v.stats.res && v.stats.res !== "--") resStr = v.stats.res;
+    }
+  });
+
+  const finalRtt = rttCount > 0 ? Math.round(avgRtt / rttCount) : "--";
+
+  setHudValue("fps", localStorage.getItem("hermes_hud_fps") !== "false", maxFps ? `${maxFps} FPS` : "--");
+  setHudValue("bitrate", localStorage.getItem("hermes_hud_bitrate") !== "false", totalBitrate ? `${totalBitrate.toFixed(1)} Mbps` : "--");
+  setHudValue("rtt", localStorage.getItem("hermes_hud_rtt") !== "false", finalRtt !== "--" ? `${finalRtt} ms` : "--");
+  setHudValue("jitter", localStorage.getItem("hermes_hud_jitter") === "true", maxJitter ? `${maxJitter} ms` : "--");
+  setHudValue("loss", localStorage.getItem("hermes_hud_loss") === "true", maxLoss ? `${maxLoss} pkts` : "--");
+  setHudValue("res", localStorage.getItem("hermes_hud_res") === "true", resStr);
+}
+
+function setHudValue(key, isVisible, val) {
+  const el = document.getElementById(`hud-item-${key}`);
+  const valEl = document.getElementById(`hud-val-${key}`);
+  if (el && valEl) {
+    el.style.display = isVisible ? "flex" : "none";
+    valEl.textContent = val;
   }
 }
 
@@ -342,6 +484,8 @@ function send(payload) {
 function connect() {
   clearTimeout(reconnectTimer);
 
+  if (manuallyKicked || manuallyBanned) return;
+
   if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) {
     return;
   }
@@ -350,7 +494,7 @@ function connect() {
   socket = new WebSocket(`${scheme}://${window.location.host}/ws`);
 
   socket.addEventListener("open", () => {
-    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId, nickname: viewerNickname });
+    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId, clientId: viewerClientId, nickname: viewerNickname });
     refreshHostStatus();
     if (isViewer && !videoEl.srcObject && peers.size === 0) {
       setStatus("Aguardando host...");
@@ -379,7 +523,9 @@ function connect() {
     } else {
       setStatus("Reconectando sinal...");
     }
-    reconnectTimer = setTimeout(connect, 2000);
+    if (!manuallyKicked && !manuallyBanned) {
+      reconnectTimer = setTimeout(connect, 2000);
+    }
   });
 
   socket.addEventListener("error", () => {
@@ -405,18 +551,65 @@ function connect() {
       return;
     }
 
+    if (data.type === "join-rejected") {
+      manuallyBanned = true;
+      if (socket) socket.close();
+      const waitSc = document.getElementById("viewer-wait-screen");
+      const stageSc = document.getElementById("viewer-stage");
+      const banSc = document.getElementById("viewer-banned-screen");
+      if (waitSc) waitSc.classList.add("hidden");
+      if (stageSc) stageSc.classList.add("hidden");
+      if (banSc) banSc.classList.remove("hidden");
+      showToast("Sua identidade foi banida nesta sessão.", "error");
+      return;
+    }
+
+    if (data.type === "viewer-kicked") {
+      manuallyKicked = true;
+      if (socket) socket.close();
+      const stageSc = document.getElementById("viewer-stage");
+      const kickSc = document.getElementById("viewer-kicked-screen");
+      if (stageSc) stageSc.classList.add("hidden");
+      if (kickSc) kickSc.classList.remove("hidden");
+      showToast("Você foi removido da transmissão.", "warning");
+      return;
+    }
+
+    if (data.type === "viewer-banned") {
+      manuallyBanned = true;
+      if (socket) socket.close();
+      const stageSc = document.getElementById("viewer-stage");
+      const banSc = document.getElementById("viewer-banned-screen");
+      if (stageSc) stageSc.classList.add("hidden");
+      if (banSc) banSc.classList.remove("hidden");
+      showToast("Sua identidade foi banida.", "error");
+      return;
+    }
+
+    if (data.type === "banned-list" && !isViewer) {
+      bannedClientsMap = data.banned || {};
+      renderBannedList();
+      return;
+    }
+
     if (data.type === "viewer-list" && !isViewer) {
       spectatorMap.clear();
       if (Array.isArray(data.viewers)) {
-        data.viewers.forEach(v => spectatorMap.set(v.viewerId, { nickname: v.nickname }));
+        data.viewers.forEach(v => spectatorMap.set(v.viewerId, {
+          nickname: v.nickname,
+          clientId: v.clientId,
+          connectedAt: v.connectedAt,
+          stats: v.stats || {}
+        }));
       }
       renderSpectatorList();
+      updateHostVideoHud();
       return;
     }
 
     if (data.type === "viewer-joined" && !isViewer) {
       const nick = data.nickname || "Espectador";
-      spectatorMap.set(data.viewerId, { nickname: nick });
+      spectatorMap.set(data.viewerId, { nickname: nick, clientId: data.clientId, connectedAt: Date.now() / 1000, stats: {} });
       renderSpectatorList();
       showToast(`${nick} entrou na rede`, "info");
       if (localStream) await createOfferForViewer(data.viewerId);
@@ -427,7 +620,7 @@ function connect() {
       const old = spectatorMap.get(data.viewerId);
       const oldNick = old ? old.nickname : "Espectador";
       const newNick = data.nickname || "Espectador";
-      spectatorMap.set(data.viewerId, { nickname: newNick });
+      if (old) old.nickname = newNick;
       renderSpectatorList();
       showToast(`${oldNick} alterou o nick para ${newNick}`, "info");
       return;
@@ -441,6 +634,7 @@ function connect() {
          if (!peer || (peer.connectionState !== "connected" && peer.connectionState !== "checking")) {
             spectatorMap.delete(data.viewerId);
             renderSpectatorList();
+            updateHostVideoHud();
             showToast(`${name} saiu da rede`, "info");
             closePeer(data.viewerId);
          }
@@ -448,9 +642,20 @@ function connect() {
       return;
     }
 
+    if (data.type === "viewer-telemetry" && !isViewer) {
+      const spec = spectatorMap.get(data.viewerId);
+      if (spec) {
+        spec.stats = data.stats;
+        renderSpectatorList();
+        updateHostVideoHud();
+        updateSpectatorDetailsModalIfOpen(data.viewerId);
+      }
+      return;
+    }
+
     if (data.type === "viewer-reconnected" && !isViewer) {
       const nick = data.nickname || "Espectador";
-      spectatorMap.set(data.viewerId, { nickname: nick });
+      spectatorMap.set(data.viewerId, { nickname: nick, clientId: data.clientId, connectedAt: Date.now() / 1000, stats: {} });
       renderSpectatorList();
       const peer = peers.get(data.viewerId);
       if (!peer || peer.connectionState === "closed" || peer.connectionState === "failed") {
@@ -1626,6 +1831,20 @@ function startViewerTelemetry() {
                 }
             }
 
+            // Telemetry reporting to Host
+            send({
+                type: "viewer-stats",
+                stats: {
+                    rtt: candidatePair?.currentRoundTripTime ? Math.round(candidatePair.currentRoundTripTime * 1000) : 0,
+                    fps: inboundRtp?.framesPerSecond ? Math.round(inboundRtp.framesPerSecond) : 0,
+                    bitrate: parseFloat(bitrate) || 0,
+                    res: res,
+                    jitter: inboundRtp?.jitter ? Math.round(inboundRtp.jitter * 1000) : 0,
+                    loss: inboundRtp?.packetsLost || 0,
+                    quality: currentViewerQuality
+                }
+            });
+
             document.getElementById("stat-res").textContent = res;
             document.getElementById("stat-fps").textContent = fps;
             document.getElementById("stat-bitrate").textContent = bitrate;
@@ -1647,7 +1866,7 @@ function startViewerTelemetry() {
                 pill.onclick = () => document.getElementById("stats-panel").classList.toggle("hidden");
             }
         } catch (e) {}
-    }, 3000);
+    }, 2500);
 }
 
 // --- TROCA DE FONTE SEAMLESS ---
@@ -1724,5 +1943,61 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Visibilidade controlada diretamente em updateHostCaptureState()
+    // Spectator Details Modal Bindings
+    const btnCloseDetails = document.getElementById("btn-close-details");
+    const spectatorDetailsModal = document.getElementById("spectator-details-modal");
+    const btnKick = document.getElementById("btn-kick-spectator");
+    const btnBan = document.getElementById("btn-ban-spectator");
+
+    if (btnCloseDetails && spectatorDetailsModal) {
+      btnCloseDetails.addEventListener("click", () => spectatorDetailsModal.classList.add("hidden"));
+    }
+
+    if (btnKick) {
+      btnKick.addEventListener("click", () => {
+        if (!selectedSpectatorId) return;
+        const spec = spectatorMap.get(selectedSpectatorId);
+        const nick = spec ? spec.nickname : "Espectador";
+        const vId = selectedSpectatorId;
+        showConfirmModal(`REMOVER ${nick.toUpperCase()} DA SESSÃO?`, "O espectador será desconectado do nó atual.", () => {
+          if (socketIsOpen()) send({ type: "kick-viewer", viewerId: vId });
+          if (spectatorDetailsModal) spectatorDetailsModal.classList.add("hidden");
+        });
+      });
+    }
+
+    if (btnBan) {
+      btnBan.addEventListener("click", () => {
+        if (!selectedSpectatorId) return;
+        const spec = spectatorMap.get(selectedSpectatorId);
+        const nick = spec ? spec.nickname : "Espectador";
+        const vId = selectedSpectatorId;
+        showConfirmModal(`BANIR ${nick.toUpperCase()}?`, "Esse usuário será removido e não poderá retornar usando esta identidade.", () => {
+          if (socketIsOpen()) send({ type: "ban-viewer", viewerId: vId, reason: "Banned by host" });
+          if (spectatorDetailsModal) spectatorDetailsModal.classList.add("hidden");
+        });
+      });
+    }
+
+    // HUD Toggles Initialization & Event Listeners
+    const bindHudToggle = (id, key) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.checked = localStorage.getItem(key) !== "false" && (key !== "hermes_hud_jitter" && key !== "hermes_hud_loss" && key !== "hermes_hud_res" || localStorage.getItem(key) === "true");
+        el.addEventListener("change", (e) => {
+          localStorage.setItem(key, e.target.checked);
+          updateHostVideoHud();
+        });
+      }
+    };
+
+    bindHudToggle("toggle-hud-enable", "hermes_hud_enable");
+    bindHudToggle("toggle-hud-fps", "hermes_hud_fps");
+    bindHudToggle("toggle-hud-bitrate", "hermes_hud_bitrate");
+    bindHudToggle("toggle-hud-rtt", "hermes_hud_rtt");
+    bindHudToggle("toggle-hud-jitter", "hermes_hud_jitter");
+    bindHudToggle("toggle-hud-loss", "hermes_hud_loss");
+    bindHudToggle("toggle-hud-res", "hermes_hud_res");
+
+    updateHostVideoHud();
 });

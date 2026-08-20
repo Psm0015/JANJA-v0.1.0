@@ -70,6 +70,16 @@
 
           <video id="video-host" autoplay playsinline muted></video>
 
+          <!-- Host Video Stage HUD Overlay -->
+          <div id="host-hud-overlay" class="host-hud-overlay hidden">
+            <div class="hud-item" id="hud-item-fps"><span>FPS</span><strong id="hud-val-fps">--</strong></div>
+            <div class="hud-item" id="hud-item-bitrate"><span>BITRATE</span><strong id="hud-val-bitrate">--</strong></div>
+            <div class="hud-item" id="hud-item-rtt"><span>RTT</span><strong id="hud-val-rtt">--</strong></div>
+            <div class="hud-item" id="hud-item-jitter"><span>JITTER</span><strong id="hud-val-jitter">--</strong></div>
+            <div class="hud-item" id="hud-item-loss"><span>PERDA</span><strong id="hud-val-loss">--</strong></div>
+            <div class="hud-item" id="hud-item-res"><span>RES</span><strong id="hud-val-res">--</strong></div>
+          </div>
+
           <div class="empty" id="empty">
             <div class="core-visual">
               <svg viewBox="0 0 80 80" fill="none" class="core-svg">
@@ -106,11 +116,12 @@
                 <input id="watch-link" type="text" readonly value="..." />
               </div>
               <button id="copy-link" class="btn-secondary" title="Copiar link da sessão" disabled>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 <span>COPIAR</span>
               </button>
-              <a id="switch-link" href="/watch" target="_blank" class="btn-icon" title="Abrir como Visitante">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              <a id="switch-link" href="/watch" target="_blank" class="btn-secondary btn-icon-text" title="Abrir como Visitante em uma nova aba">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                <span>ABRIR VIEWER</span>
               </a>
             </div>
 
@@ -178,6 +189,34 @@
         </div>
 
         <div class="drawer-content">
+          <!-- HUD Monitoring Toggles -->
+          <div class="config-group">
+            <div class="config-group-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              <span>MONITORAÇÃO NO PLAYER (HUD)</span>
+            </div>
+            <label class="checkbox-control"><input type="checkbox" id="toggle-hud-enable" checked /> <span>Exibir HUD de desempenho no vídeo</span></label>
+            <div class="hud-toggles-grid">
+              <label class="checkbox-control"><input type="checkbox" id="toggle-hud-fps" checked /> <span>FPS</span></label>
+              <label class="checkbox-control"><input type="checkbox" id="toggle-hud-bitrate" checked /> <span>Bitrate</span></label>
+              <label class="checkbox-control"><input type="checkbox" id="toggle-hud-rtt" checked /> <span>Ping / RTT</span></label>
+              <label class="checkbox-control"><input type="checkbox" id="toggle-hud-jitter" /> <span>Jitter</span></label>
+              <label class="checkbox-control"><input type="checkbox" id="toggle-hud-loss" /> <span>Perda de Pacotes</span></label>
+              <label class="checkbox-control"><input type="checkbox" id="toggle-hud-res" /> <span>Resolução</span></label>
+            </div>
+          </div>
+
+          <!-- Moderation & Bans Section -->
+          <div class="config-group">
+            <div class="config-group-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span>MODERAÇÃO & BANIMENTOS</span>
+            </div>
+            <div id="banned-list-container" class="banned-list-container">
+              <span class="status-text">Nenhum usuário banido.</span>
+            </div>
+          </div>
+
           <!-- Audio Source Config -->
           <div class="config-group">
             <div class="config-group-title">
@@ -418,6 +457,66 @@
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- SPECTATOR DETAILS & MODERATION MODAL -->
+    <div id="spectator-details-modal" class="modal-overlay hidden">
+      <div class="modal-card details-card">
+        <div class="modal-brand">
+          <div id="details-avatar" class="avatar-circle avatar-lg">H</div>
+          <div class="modal-title-group">
+            <h3 id="details-nickname">Henrique</h3>
+            <span id="details-status-tag" class="status-pill green">● ONLINE</span>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <div class="telemetry-grid">
+            <div class="t-item"><span>PING / RTT</span><strong id="det-rtt">--</strong></div>
+            <div class="t-item"><span>BITRATE</span><strong id="det-bitrate">--</strong></div>
+            <div class="t-item"><span>FPS</span><strong id="det-fps">--</strong></div>
+            <div class="t-item"><span>RESOLUÇÃO</span><strong id="det-res">--</strong></div>
+            <div class="t-item"><span>QUALIDADE</span><strong id="det-quality">--</strong></div>
+            <div class="t-item"><span>JITTER</span><strong id="det-jitter">--</strong></div>
+            <div class="t-item"><span>PERDA</span><strong id="det-loss">--</strong></div>
+            <div class="t-item"><span>CONECTADO HÁ</span><strong id="det-uptime">--</strong></div>
+          </div>
+        </div>
+
+        <div class="modal-actions space-between">
+          <button id="btn-close-details" class="btn-secondary">FECHAR</button>
+          <div class="action-danger-group">
+            <button id="btn-kick-spectator" class="btn-warning-alt">EXPULSAR</button>
+            <button id="btn-ban-spectator" class="btn-danger">BANIR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEWER KICKED SCREEN -->
+    <div id="viewer-kicked-screen" class="wait-screen hidden">
+      <div class="scanning-core">
+        <svg viewBox="0 0 100 100" class="scan-svg">
+          <circle cx="50" cy="50" r="44" stroke="var(--warning)" stroke-width="2"/>
+          <line x1="30" y1="30" x2="70" y2="70" stroke="var(--warning)" stroke-width="3"/>
+        </svg>
+      </div>
+      <h2>REMOVIDO DA SESSÃO</h2>
+      <p>O Host encerrou sua participação nesta transmissão.</p>
+      <a href="/watch" class="btn-secondary margin-top-md">TENTAR NOVAMENTE</a>
+    </div>
+
+    <!-- VIEWER BANNED SCREEN -->
+    <div id="viewer-banned-screen" class="wait-screen hidden">
+      <div class="scanning-core">
+        <svg viewBox="0 0 100 100" class="scan-svg">
+          <circle cx="50" cy="50" r="44" stroke="var(--danger)" stroke-width="2"/>
+          <line x1="30" y1="30" x2="70" y2="70" stroke="var(--danger)" stroke-width="3"/>
+          <line x1="70" y1="30" x2="30" y2="70" stroke="var(--danger)" stroke-width="3"/>
+        </svg>
+      </div>
+      <h2>ACESSO BLOQUEADO (BAN)</h2>
+      <p>Sua identidade foi banida pelo administrador do nó HERMES.</p>
     </div>
 
     <!-- CONFIRMATION MODAL -->

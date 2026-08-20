@@ -10,12 +10,12 @@ import socket
 import struct
 import math
 import sys
+import time as _time
 import webbrowser
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import uuid4
-import sys
 
 
 if getattr(sys, 'frozen', False):
@@ -416,9 +416,10 @@ async def serve_audio_selection(reader: asyncio.StreamReader, method: str, heade
     await writer.wait_closed()
 
 
-CHUNK_SIZE = 8192
-SAMPLE_RATE = 44_100
+CHUNK_SIZE = 3840
+SAMPLE_RATE = 48_000
 CHANNELS = 2
+CHUNK_DURATION = CHUNK_SIZE / (CHANNELS * 2) / SAMPLE_RATE  # ~0.02s = 20ms
 
 
 def parse_pid_list(value: str) -> list[str]:
@@ -453,6 +454,7 @@ async def generate_mock_audio(ws: WebSocket, process_ids: list[str] | None = Non
     phases = [0.0 for _ in ids]
     frequencies = [220.0 + (pid % 12) * 37.0 for pid in ids]
     frames = CHUNK_SIZE // (CHANNELS * 2)
+    next_send = _time.monotonic()
 
     try:
         while not ws.closed:
@@ -469,7 +471,12 @@ async def generate_mock_audio(ws: WebSocket, process_ids: list[str] | None = Non
                 samples.extend(struct.pack("<hh", value, value))
 
             await ws.send_binary(bytes(samples))
-            await asyncio.sleep(frames / SAMPLE_RATE)
+            next_send += CHUNK_DURATION
+            delay = next_send - _time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            else:
+                next_send = _time.monotonic()
     except (ConnectionResetError, asyncio.IncompleteReadError, OSError):
         pass
     finally:
@@ -498,6 +505,7 @@ async def stream_mock_wav(writer: asyncio.StreamWriter, process_ids: list[str] |
     phases = [0.0 for _ in ids]
     frequencies = [220.0 + (pid % 12) * 37.0 for pid in ids]
     frames = CHUNK_SIZE // (CHANNELS * 2)
+    next_send = _time.monotonic()
 
     await write_stream_headers(writer, "audio/wav")
     writer.write(wav_header())
@@ -508,7 +516,12 @@ async def stream_mock_wav(writer: asyncio.StreamWriter, process_ids: list[str] |
             chunk, phases = mock_audio_chunk(phases, frequencies)
             writer.write(chunk)
             await writer.drain()
-            await asyncio.sleep(frames / SAMPLE_RATE)
+            next_send += CHUNK_DURATION
+            delay = next_send - _time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            else:
+                next_send = _time.monotonic()
     except (ConnectionResetError, BrokenPipeError, OSError):
         pass
     finally:
@@ -538,11 +551,15 @@ async def stream_single_process_audio(ws: WebSocket, process_id: str, mode: str)
             await ws.close()
             return
 
+        buf = bytearray()
         while not ws.closed:
-            chunk = await process.stdout.read(8192)
-            if not chunk:
+            raw = await process.stdout.read(CHUNK_SIZE * 4)
+            if not raw:
                 break
-            await ws.send_binary(chunk)
+            buf.extend(raw)
+            while len(buf) >= CHUNK_SIZE:
+                await ws.send_binary(bytes(buf[:CHUNK_SIZE]))
+                del buf[:CHUNK_SIZE]
     except (ConnectionResetError, asyncio.IncompleteReadError, OSError):
         pass
     finally:
@@ -640,7 +657,7 @@ async def stream_mixed_process_audio(ws: WebSocket, process_ids: list[str]) -> N
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=12)
+            queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=24)
             processes.append(process)
             queues.append(queue)
             buffers.append(bytearray())
@@ -665,7 +682,7 @@ async def stream_mixed_process_audio(ws: WebSocket, process_ids: list[str]) -> N
             else:
                 await ws.send_binary(b"\x00" * CHUNK_SIZE)
 
-            await asyncio.sleep((CHUNK_SIZE // (CHANNELS * 2)) / SAMPLE_RATE)
+            await asyncio.sleep(CHUNK_DURATION)
     except (ConnectionResetError, asyncio.IncompleteReadError, OSError):
         pass
     finally:
@@ -707,7 +724,7 @@ async def stream_mixed_process_wav(writer: asyncio.StreamWriter, process_ids: li
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=12)
+            queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=24)
             processes.append(process)
             queues.append(queue)
             buffers.append(bytearray())
@@ -729,7 +746,7 @@ async def stream_mixed_process_wav(writer: asyncio.StreamWriter, process_ids: li
 
             writer.write(mix_pcm16(chunks) if chunks else b"\x00" * CHUNK_SIZE)
             await writer.drain()
-            await asyncio.sleep((CHUNK_SIZE // (CHANNELS * 2)) / SAMPLE_RATE)
+            await asyncio.sleep(CHUNK_DURATION)
     except (ConnectionResetError, BrokenPipeError, OSError):
         pass
     finally:
@@ -940,6 +957,11 @@ async def handle_ws(ws: WebSocket) -> None:
                     "viewerId": client_id,
                     "stats": stats
                 })
+                continue
+
+            if message_type == "stream-stopped" and role == "host":
+                for viewer in list(VIEWERS.values()):
+                    await send_json(viewer, {"type": "stream-stopped"})
                 continue
 
             if message_type in {"offer", "host-ice", "quality-applied"} and role == "host":

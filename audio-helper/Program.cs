@@ -127,7 +127,7 @@ static class ProcessLoopbackStreamer
         }
 
         var audioClient = Activate(processId, includeProcessTree);
-        var format = WaveFormatExtensible.PcmStereo44100();
+        var format = WaveFormatExtensible.PcmStereo48000();
         var formatPtr = Marshal.AllocHGlobal(Marshal.SizeOf<WaveFormatExtensible>());
 
         try
@@ -135,7 +135,7 @@ static class ProcessLoopbackStreamer
             Marshal.StructureToPtr(format, formatPtr, false);
 
             const AudioClientStreamFlags flags =
-                AudioClientStreamFlags.Loopback | AudioClientStreamFlags.AutoConvertPcm;
+                AudioClientStreamFlags.Loopback | AudioClientStreamFlags.AutoConvertPcm | AudioClientStreamFlags.SrcDefaultQuality;
 
             Marshal.ThrowExceptionForHR(audioClient.Initialize(
                 AudioClientShareMode.Shared,
@@ -560,6 +560,7 @@ enum AudioClientStreamFlags : uint
 {
     Loopback = 0x00020000,
     AutoConvertPcm = 0x80000000,
+    SrcDefaultQuality = 0x08000000,
 }
 
 [Flags]
@@ -616,7 +617,7 @@ struct WaveFormatExtensible
     public uint dwChannelMask;
     public Guid SubFormat;
 
-    public static WaveFormatExtensible PcmStereo44100()
+    public static WaveFormatExtensible PcmStereo48000()
     {
         return new WaveFormatExtensible
         {
@@ -624,8 +625,8 @@ struct WaveFormatExtensible
             {
                 wFormatTag = 0xFFFE,
                 nChannels = 2,
-                nSamplesPerSec = 44_100,
-                nAvgBytesPerSec = 44_100 * 2 * 2,
+                nSamplesPerSec = 48_000,
+                nAvgBytesPerSec = 48_000 * 2 * 2,
                 nBlockAlign = 4,
                 wBitsPerSample = 16,
                 cbSize = 22,

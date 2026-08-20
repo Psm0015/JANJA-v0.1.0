@@ -51,6 +51,7 @@ let viewerPeer;
 let viewerCount = 0;
 let reconnectTimer;
 let manuallyStopped = false;
+let userExplicitlyPaused = false;
 let tunnelTimer;
 let appTimer;
 let latestAudioApps = [];
@@ -334,12 +335,14 @@ function updateHostCaptureState(newState) {
   if (newState === CaptureState.IDLE) {
     setStatus("OFFLINE");
     activeAudioSource = AudioSource.NONE;
+    if (startButton) startButton.disabled = false;
+    if (stopButton) stopButton.disabled = true;
   } else if (newState === CaptureState.REQUESTING_CAPTURE) {
     setStatus("SOLICITANDO CAPTURA");
   } else if (newState === CaptureState.STREAMING) {
     setStatus("TRANSMITINDO");
   } else if (newState === CaptureState.ERROR) {
-    // Error status set in startShare
+    if (startButton) startButton.disabled = false;
   }
   updateHostVideoHud();
 }
@@ -353,8 +356,6 @@ function refreshHostStatus() {
     updateHostCaptureState(CaptureState.STREAMING);
   } else if (localStream) {
     setStatus("RECONECTANDO");
-  } else if (socketIsOpen()) {
-    setStatus("CONECTADO");
   } else {
     updateHostCaptureState(CaptureState.IDLE);
   }
@@ -424,10 +425,19 @@ function stopStreamAudioTracks() {
 }
 
 async function captureDisplayStream(audioMode) {
+  const wantAudio = audioMode !== "none" && audioMode !== "screen-no-discord";
+  const audioConstraints = wantAudio ? {
+    autoGainControl: false,
+    echoCancellation: false,
+    noiseSuppression: false,
+    sampleRate: 48000,
+    channelCount: 2
+  } : false;
+
   try {
     return await navigator.mediaDevices.getDisplayMedia({
       video: true,
-      audio: audioMode !== "none" && audioMode !== "screen-no-discord"
+      audio: audioConstraints
     });
   } catch (error) {
     if (error.name === "TypeError" || error.name === "NotSupportedError") {
@@ -455,6 +465,47 @@ async function loadAudioCapabilities() {
   }
 
   return audioCapabilities;
+}
+
+// ---------- SDP Munging for Opus Stereo HD ----------
+function mungeOpusSdp(sdp) {
+  const lines = sdp.split("\r\n");
+  const result = [];
+  let opusPayload = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Find Opus payload type from rtpmap
+    const rtpmapMatch = line.match(/^a=rtpmap:(\d+)\s+opus\/48000\/2/i);
+    if (rtpmapMatch) {
+      opusPayload = rtpmapMatch[1];
+    }
+
+    // Modify existing fmtp for Opus or append our parameters
+    if (opusPayload && line.startsWith(`a=fmtp:${opusPayload} `)) {
+      let fmtp = line;
+      // Ensure stereo=1
+      if (!/stereo=/.test(fmtp)) fmtp += ";stereo=1";
+      else fmtp = fmtp.replace(/stereo=\d/, "stereo=1");
+      // Ensure sprop-stereo=1
+      if (!/sprop-stereo=/.test(fmtp)) fmtp += ";sprop-stereo=1";
+      else fmtp = fmtp.replace(/sprop-stereo=\d/, "sprop-stereo=1");
+      // Set maxaveragebitrate to 128kbps
+      if (!/maxaveragebitrate=/.test(fmtp)) fmtp += ";maxaveragebitrate=128000";
+      else fmtp = fmtp.replace(/maxaveragebitrate=\d+/, "maxaveragebitrate=128000");
+      // Disable DTX (don't silence quiet parts)
+      if (!/usedtx=/.test(fmtp)) fmtp += ";usedtx=0";
+      else fmtp = fmtp.replace(/usedtx=\d/, "usedtx=0");
+
+      result.push(fmtp);
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  return result.join("\r\n");
 }
 
 function updateMixerStatus() {
@@ -717,6 +768,25 @@ function connect() {
       return;
     }
 
+    if (data.type === "stream-stopped" && isViewer) {
+      console.log("[HERMES SESSION] stream-stopped received");
+      if (viewerPeer) {
+        viewerPeer.close();
+        viewerPeer = null;
+      }
+      stopRemoteAudio();
+      videoEl.pause();
+      videoEl.srcObject = null;
+      const stageSc = document.getElementById("viewer-stage");
+      const waitSc = document.getElementById("viewer-wait-screen");
+      const statusText = document.getElementById("viewer-status-text");
+      if (stageSc) stageSc.classList.add("hidden");
+      if (waitSc) waitSc.classList.remove("hidden");
+      if (statusText) statusText.textContent = "TRANSMISSÃO ENCERRADA // AGUARDANDO NOVO SINAL";
+      setStatus("Transmissão encerrada");
+      return;
+    }
+
     if (data.type === "host-left" && isViewer) {
       setStatus("Host saiu");
       setEmpty(true, "Aguardando host", "A transmissao volta automaticamente quando o host reconectar.");
@@ -735,6 +805,7 @@ async function startShare() {
       throw new Error("getDisplayMedia não suportado ou contexto não seguro (precisa de HTTPS ou localhost).");
     }
 
+    console.log("[HERMES SESSION] starting new media");
     manuallyStopped = false;
     updateHostCaptureState(CaptureState.REQUESTING_CAPTURE);
     const audioMode = audioModeSelect.value;
@@ -812,22 +883,24 @@ async function startShare() {
     if (compatibilityMessage) {
       setStatus("Video sem audio");
     }
-    startButton.disabled = true;
-    stopButton.disabled = false;
+    if (startButton) startButton.disabled = true;
+    if (stopButton) stopButton.disabled = false;
 
     localStream.getTracks().forEach((track) => {
       track.addEventListener("ended", () => {
         if (!manuallyStopped && !isSwitchingSource) stopShare();
       });
     });
+
+    // Send new offer to all connected viewers in spectatorMap
+    console.log(`[HERMES SESSION] offering stream to ${spectatorMap.size} viewers`);
+    for (const viewerId of spectatorMap.keys()) {
+      await createOfferForViewer(viewerId);
+    }
   } catch (error) {
     console.error("[JANJA CAPTURE ERROR]\n",
       "name:", error.name, "\n",
-      "message:", error.message, "\n",
-      "constraint:", error.constraint, "\n",
-      "secureContext:", window.isSecureContext, "\n",
-      "documentFocused:", document.hasFocus(), "\n",
-      "userAgent:", navigator.userAgent
+      "message:", error.message
     );
     updateHostCaptureState(CaptureState.ERROR);
     const denied = error.name === "NotAllowedError" || error.name === "SecurityError" || error.name === "PermissionDeniedError";
@@ -839,6 +912,11 @@ async function startShare() {
         ? "O navegador precisa da sua permissao para compartilhar a tela."
         : `O navegador recusou a configuração (${error.name}). Tente novamente com Escolher tela/janela/guia.`
     );
+    setTimeout(() => {
+      if (currentCaptureState === CaptureState.ERROR) {
+        updateHostCaptureState(CaptureState.IDLE);
+      }
+    }, 2500);
   }
 }
 
@@ -848,7 +926,13 @@ async function createOfferForViewer(id) {
   const peer = new RTCPeerConnection(rtcConfig);
   peers.set(id, peer);
 
-  localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
+  localStream.getTracks().forEach((track) => {
+    // Set contentHint for audio tracks to "music" for Opus music mode
+    if (track.kind === "audio" && "contentHint" in track) {
+      track.contentHint = "music";
+    }
+    peer.addTrack(track, localStream);
+  });
 
   peer.addEventListener("icecandidate", (event) => {
     if (event.candidate) {
@@ -863,7 +947,27 @@ async function createOfferForViewer(id) {
   });
 
   const offer = await peer.createOffer();
+
+  // Munge SDP for Opus stereo HD
+  offer.sdp = mungeOpusSdp(offer.sdp);
+
   await peer.setLocalDescription(offer);
+
+  // Set Opus audio sender bitrate to 128kbps
+  try {
+    const audioSender = peer.getSenders().find(s => s.track && s.track.kind === "audio");
+    if (audioSender) {
+      const params = audioSender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+      params.encodings[0].maxBitrate = 128000;
+      await audioSender.setParameters(params);
+    }
+  } catch (e) {
+    console.warn("[HERMES] Failed to set audio sender bitrate", e);
+  }
+
   send({ type: "offer", viewerId: id, offer });
 }
 
@@ -890,18 +994,11 @@ async function acceptOffer(offer) {
 
 
   viewerPeer.addEventListener("track", (event) => {
+    console.log("[HERMES PLAYBACK] media attached");
     const [stream] = event.streams;
     videoEl.srcObject = stream;
-    setEmpty(false);
-    
-    const hasAudio = stream.getAudioTracks().length > 0;
-    setStatus(hasAudio ? "Assistindo" : "Vídeo sem áudio");
-
-    if (isViewer) {
-      const unmuteBtn = document.querySelector("#unmute-overlay-btn");
-      if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
-      enableViewerAudio();
-    }
+    userExplicitlyPaused = false;
+    startViewerVideoPlayback();
   });
 
   viewerPeer.addEventListener("icecandidate", (event) => {
@@ -912,6 +1009,10 @@ async function acceptOffer(offer) {
 
   await viewerPeer.setRemoteDescription(offer);
   const answer = await viewerPeer.createAnswer();
+
+  // Munge SDP for Opus stereo HD on viewer side
+  answer.sdp = mungeOpusSdp(answer.sdp);
+
   await viewerPeer.setLocalDescription(answer);
   send({ type: "answer", viewerId, answer });
 }
@@ -925,18 +1026,26 @@ function closePeer(id) {
 }
 
 function stopShare() {
+  console.log("[HERMES SESSION] stopping media");
   manuallyStopped = true;
-  localStream?.getTracks().forEach((track) => track.stop());
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStream = null;
+  }
   stopFilteredAudio();
   publishAudioSelection([]);
-  localStream = null;
   peers.forEach((peer) => peer.close());
   peers.clear();
   videoEl.srcObject = null;
+
+  if (socketIsOpen()) {
+    send({ type: "stream-stopped" });
+  }
+
+  updateHostCaptureState(CaptureState.IDLE);
+  console.log("[HERMES STATE] STREAMING -> IDLE");
   setEmpty(true, "Compartilhamento pausado", "Clique em iniciar para transmitir novamente.");
-  refreshHostStatus();
-  startButton.disabled = false;
-  stopButton.disabled = true;
+  console.log("[HERMES SESSION] media stopped");
 }
 
 async function toggleFullscreen() {
@@ -1009,30 +1118,76 @@ function applyViewerVolume() {
   }
 }
 
-async function enableViewerAudio() {
-  if (!isViewer) return;
+async function startViewerVideoPlayback() {
+  if (!videoEl.srcObject) return;
 
-  const volume = Number(volumeInput.value);
-  if (volume === 0) {
-    volumeInput.value = 85;
-    volumeValue.textContent = "85%";
+  videoEl.muted = true;
+  videoEl.autoplay = true;
+  videoEl.playsInline = true;
+
+  const stageSc = document.getElementById("viewer-stage");
+  const waitSc = document.getElementById("viewer-wait-screen");
+
+  const doPlay = async () => {
+    if (userExplicitlyPaused) return;
+    try {
+      console.log("[HERMES PLAYBACK] autoplay muted requested");
+      await videoEl.play();
+      console.log("[HERMES PLAYBACK] playing");
+
+      if (stageSc) stageSc.classList.remove("hidden");
+      if (waitSc) waitSc.classList.add("hidden");
+      setEmpty(false);
+
+      const hasAudio = (videoEl.srcObject?.getAudioTracks().length || 0) > 0;
+      setStatus(hasAudio ? "Assistindo" : "Vídeo sem áudio");
+
+      const unmuteBtn = document.querySelector("#unmute-overlay-btn");
+      if (hasAudio && videoEl.muted) {
+        if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
+        console.log("[HERMES AUDIO] unlock required");
+      } else if (unmuteBtn) {
+        unmuteBtn.style.display = "none";
+      }
+    } catch (err) {
+      console.warn("[HERMES PLAYBACK] play rejected:", err.name, err.message);
+      if (stageSc) stageSc.classList.remove("hidden");
+      if (waitSc) waitSc.classList.add("hidden");
+      const unmuteBtn = document.querySelector("#unmute-overlay-btn");
+      if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
+    }
+  };
+
+  if (videoEl.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    await doPlay();
+  } else {
+    videoEl.addEventListener("loadedmetadata", doPlay, { once: true });
   }
+}
 
-  setViewerVolume(Number(volumeInput.value));
-  setViewerMuted(false);
-  remoteAudioContext?.resume();
-
-  const unmuteBtn = document.querySelector("#unmute-overlay-btn");
-
+async function unlockViewerAudio() {
+  if (!isViewer) return;
   try {
-    await videoEl.play();
+    if (remoteAudioContext && remoteAudioContext.state === "suspended") {
+      await remoteAudioContext.resume();
+    }
+    const savedVol = Number(localStorage.getItem("lule_volume") || 85);
+    setViewerVolume(savedVol);
+    setViewerMuted(savedVol === 0);
+    const unmuteBtn = document.querySelector("#unmute-overlay-btn");
     if (unmuteBtn) unmuteBtn.style.display = "none";
+    console.log("[HERMES AUDIO] unlocked");
     setStatus("Assistindo");
   } catch (err) {
-    console.warn("[JANJA AUDIO PLAY ERROR]", err);
+    console.warn("[JANJA AUDIO UNLOCK ERROR]", err);
+    const unmuteBtn = document.querySelector("#unmute-overlay-btn");
     if (unmuteBtn) unmuteBtn.style.display = "inline-flex";
     setStatus("Clique no video para ouvir");
   }
+}
+
+async function enableViewerAudio() {
+  await unlockViewerAudio();
 }
 
 function syncVolume() {
@@ -1074,7 +1229,7 @@ async function loadRemoteAudioSelection() {
 async function startRemoteAudio() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   try {
-    remoteAudioContext = new AudioContextClass({ sampleRate: 44100 });
+    remoteAudioContext = new AudioContextClass({ sampleRate: 48000 });
   } catch (error) {
     remoteAudioContext = new AudioContextClass();
   }
@@ -1136,7 +1291,7 @@ async function createFilteredAudioTrack(version) {
   }
 
   try {
-    filteredAudioContext = new AudioContextClass({ sampleRate: 44100 });
+    filteredAudioContext = new AudioContextClass({ sampleRate: 48000 });
   } catch (error) {
     filteredAudioContext = new AudioContextClass();
   }
@@ -1160,6 +1315,10 @@ async function createFilteredAudioTrack(version) {
   const [track] = filteredAudioDestination.stream.getAudioTracks();
   if (!track) {
     throw new Error("O mixer filtrado nao gerou faixa de audio.");
+  }
+  // Set contentHint so Opus uses music mode instead of voice
+  if ("contentHint" in track) {
+    track.contentHint = "music";
   }
 
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -1684,9 +1843,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const unmuteBtn = document.getElementById("unmute-overlay-btn");
         if (unmuteBtn) {
             unmuteBtn.addEventListener("click", () => {
-                videoEl.muted = false;
-                updateMuteIcon && updateMuteIcon();
-                unmuteBtn.style.display = "none";
+                unlockViewerAudio();
             });
             videoEl.addEventListener("volumechange", () => {
                 if (!videoEl.muted) unmuteBtn.style.display = "none";

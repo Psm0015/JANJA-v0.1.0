@@ -100,10 +100,16 @@ const spectatorMap = new Map();
 let bannedClientsMap = {};
 let selectedSpectatorId = null;
 
-let viewerClientId = localStorage.getItem("hermes_client_id");
+let viewerClientId = localStorage.getItem("hermes_viewer_client_id");
 if (!viewerClientId) {
-    viewerClientId = Array.from(crypto.getRandomValues(new Uint32Array(4))).map(b => b.toString(16).padStart(8, '0')).join('');
-    localStorage.setItem("hermes_client_id", viewerClientId);
+    viewerClientId = 'V-' + Array.from(crypto.getRandomValues(new Uint32Array(3))).map(b => b.toString(16).padStart(6, '0')).join('');
+    localStorage.setItem("hermes_viewer_client_id", viewerClientId);
+}
+
+let hostClientId = localStorage.getItem("hermes_host_client_id");
+if (!hostClientId) {
+    hostClientId = 'H-' + Array.from(crypto.getRandomValues(new Uint32Array(3))).map(b => b.toString(16).padStart(6, '0')).join('');
+    localStorage.setItem("hermes_host_client_id", hostClientId);
 }
 
 let viewerNickname = localStorage.getItem("hermes_viewer_nickname") || "";
@@ -494,7 +500,8 @@ function connect() {
   socket = new WebSocket(`${scheme}://${window.location.host}/ws`);
 
   socket.addEventListener("open", () => {
-    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId, clientId: viewerClientId, nickname: viewerNickname });
+    const currentClientId = isViewer ? viewerClientId : hostClientId;
+    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId, clientId: currentClientId, nickname: viewerNickname });
     refreshHostStatus();
     if (isViewer && !videoEl.srcObject && peers.size === 0) {
       setStatus("Aguardando host...");
@@ -552,6 +559,7 @@ function connect() {
     }
 
     if (data.type === "join-rejected") {
+      if (!isViewer) return;
       manuallyBanned = true;
       if (socket) socket.close();
       const waitSc = document.getElementById("viewer-wait-screen");
@@ -565,6 +573,7 @@ function connect() {
     }
 
     if (data.type === "viewer-kicked") {
+      if (!isViewer) return;
       manuallyKicked = true;
       if (socket) socket.close();
       const stageSc = document.getElementById("viewer-stage");
@@ -576,6 +585,7 @@ function connect() {
     }
 
     if (data.type === "viewer-banned") {
+      if (!isViewer) return;
       manuallyBanned = true;
       if (socket) socket.close();
       const stageSc = document.getElementById("viewer-stage");

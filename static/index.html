@@ -400,6 +400,32 @@
            </div>
          </div>
       </div>
+
+       <!-- VIEWER KICKED SCREEN -->
+       <div id="viewer-kicked-screen" class="wait-screen hidden">
+         <div class="scanning-core">
+           <svg viewBox="0 0 100 100" class="scan-svg">
+             <circle cx="50" cy="50" r="44" stroke="var(--warning)" stroke-width="2"/>
+             <line x1="30" y1="30" x2="70" y2="70" stroke="var(--warning)" stroke-width="3"/>
+           </svg>
+         </div>
+         <h2>REMOVIDO DA SESSÃO</h2>
+         <p>O Host encerrou sua participação nesta transmissão.</p>
+         <a href="/watch" class="btn-secondary margin-top-md">TENTAR NOVAMENTE</a>
+       </div>
+
+       <!-- VIEWER BANNED SCREEN -->
+       <div id="viewer-banned-screen" class="wait-screen hidden">
+         <div class="scanning-core">
+           <svg viewBox="0 0 100 100" class="scan-svg">
+             <circle cx="50" cy="50" r="44" stroke="var(--danger)" stroke-width="2"/>
+             <line x1="30" y1="30" x2="70" y2="70" stroke="var(--danger)" stroke-width="3"/>
+             <line x1="70" y1="30" x2="30" y2="70" stroke="var(--danger)" stroke-width="3"/>
+           </svg>
+         </div>
+         <h2>ACESSO BLOQUEADO (BAN)</h2>
+         <p>Sua identidade foi banida pelo administrador do nó HERMES.</p>
+       </div>
     </main>
 
     <!-- Viewer Settings Drawer -->
@@ -491,32 +517,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- VIEWER KICKED SCREEN -->
-    <div id="viewer-kicked-screen" class="wait-screen hidden">
-      <div class="scanning-core">
-        <svg viewBox="0 0 100 100" class="scan-svg">
-          <circle cx="50" cy="50" r="44" stroke="var(--warning)" stroke-width="2"/>
-          <line x1="30" y1="30" x2="70" y2="70" stroke="var(--warning)" stroke-width="3"/>
-        </svg>
-      </div>
-      <h2>REMOVIDO DA SESSÃO</h2>
-      <p>O Host encerrou sua participação nesta transmissão.</p>
-      <a href="/watch" class="btn-secondary margin-top-md">TENTAR NOVAMENTE</a>
-    </div>
-
-    <!-- VIEWER BANNED SCREEN -->
-    <div id="viewer-banned-screen" class="wait-screen hidden">
-      <div class="scanning-core">
-        <svg viewBox="0 0 100 100" class="scan-svg">
-          <circle cx="50" cy="50" r="44" stroke="var(--danger)" stroke-width="2"/>
-          <line x1="30" y1="30" x2="70" y2="70" stroke="var(--danger)" stroke-width="3"/>
-          <line x1="70" y1="30" x2="30" y2="70" stroke="var(--danger)" stroke-width="3"/>
-        </svg>
-      </div>
-      <h2>ACESSO BLOQUEADO (BAN)</h2>
-      <p>Sua identidade foi banida pelo administrador do nó HERMES.</p>
     </div>
 
     <!-- CONFIRMATION MODAL -->

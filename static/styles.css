@@ -64,6 +64,11 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Global Hidden Utility */
+.hidden {
+  display: none !important;
+}
+
 /* Multi-layered Ambient Background */
 body::before {
   content: "";
@@ -920,9 +925,10 @@ select:focus, input[type="text"]:focus {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: radial-gradient(circle at center, rgba(12, 7, 20, 0.95) 0%, var(--void) 100%);
+  background: var(--void);
   text-align: center;
   padding: 24px;
+  z-index: 100;
 }
 
 .scanning-core {

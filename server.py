@@ -29,6 +29,7 @@ WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 HOST: "WebSocket | None" = None
 VIEWERS: dict[str, "WebSocket"] = {}
+VIEWER_METADATA: dict[str, dict[str, Any]] = {}
 CLOUDFLARED_PROCESS: "asyncio.subprocess.Process | None" = None
 TUNNEL_INFO: dict[str, Any] = {
     "status": "stopped",
@@ -810,24 +811,49 @@ async def handle_ws(ws: WebSocket) -> None:
 
                     HOST = ws
                     await ws.send_json({"type": "joined", "role": "host"})
+                    viewer_list = []
                     for viewer_id, viewer in list(VIEWERS.items()):
                         if viewer.closed:
                             VIEWERS.pop(viewer_id, None)
+                            VIEWER_METADATA.pop(viewer_id, None)
                             continue
-                        await ws.send_json({"type": "viewer-joined", "viewerId": viewer_id})
+                        meta = VIEWER_METADATA.get(viewer_id, {})
+                        viewer_list.append({"viewerId": viewer_id, "nickname": meta.get("nickname", "Espectador")})
+                    await ws.send_json({"type": "viewer-list", "viewers": viewer_list})
                     continue
 
                 if role == "viewer":
+                    nickname = (data.get("nickname") or "").strip()[:24] or "Espectador"
                     reconnected = client_id in VIEWERS
                     VIEWERS[client_id] = ws
-                    await ws.send_json({"type": "joined", "role": "viewer", "viewerId": client_id})
-                    if reconnected:
-                        await send_json(HOST, {"type": "viewer-reconnected", "viewerId": client_id})
-                    else:
-                        await send_json(HOST, {"type": "viewer-joined", "viewerId": client_id})
+                    VIEWER_METADATA[client_id] = {
+                        "nickname": nickname,
+                        "connectedAt": time.time()
+                    }
+                    await ws.send_json({"type": "joined", "role": "viewer", "viewerId": client_id, "nickname": nickname})
+                    msg_type = "viewer-reconnected" if reconnected else "viewer-joined"
+                    await send_json(HOST, {
+                        "type": msg_type,
+                        "viewerId": client_id,
+                        "nickname": nickname,
+                        "count": len(VIEWERS)
+                    })
                     continue
 
                 await ws.send_json({"type": "error", "message": "Papel desconhecido."})
+                continue
+
+            if message_type == "viewer-update" and role == "viewer":
+                new_nick = (data.get("nickname") or "").strip()[:24]
+                if new_nick:
+                    if client_id in VIEWER_METADATA:
+                        VIEWER_METADATA[client_id]["nickname"] = new_nick
+                    await ws.send_json({"type": "viewer-updated-ack", "nickname": new_nick})
+                    await send_json(HOST, {
+                        "type": "viewer-updated",
+                        "viewerId": client_id,
+                        "nickname": new_nick
+                    })
                 continue
 
             if message_type in {"offer", "host-ice", "quality-applied"} and role == "host":
@@ -850,8 +876,15 @@ async def handle_ws(ws: WebSocket) -> None:
                 await send_json(viewer, {"type": "host-left"})
 
         if role == "viewer":
+            meta = VIEWER_METADATA.pop(client_id, None)
+            old_nick = meta.get("nickname") if meta else "Espectador"
             VIEWERS.pop(client_id, None)
-            await send_json(HOST, {"type": "viewer-left", "viewerId": client_id})
+            await send_json(HOST, {
+                "type": "viewer-left",
+                "viewerId": client_id,
+                "nickname": old_nick,
+                "count": len(VIEWERS)
+            })
 
         await ws.close()
 

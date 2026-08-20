@@ -3,117 +3,231 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>LULE3000</title>
+    <title>HERMES — CYBERSTREAM NETWORK</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   </head>
   <body>
-    <!-- Intro Sequence -->
+    <!-- Ambient Energy Grid Background -->
+    <div class="ambient-grid"></div>
+
+    <!-- Intro Boot Sequence -->
     <div id="intro-sequence" class="intro-active">
-      <div class="intro-core"></div>
-      <div class="intro-text" id="intro-text">SYSTEM INITIALIZING</div>
+      <div class="intro-core">
+        <svg class="intro-logo-svg" viewBox="0 0 64 64" fill="none">
+          <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" stroke="#8b5cf6" stroke-width="2.5" stroke-linejoin="round"/>
+          <polygon points="32,14 46,22 46,42 32,50 18,42 18,22" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="32" cy="32" r="6" fill="#d946ef"/>
+          <circle cx="32" cy="32" r="14" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4 4" class="spin-ring"/>
+        </svg>
+      </div>
+      <div class="intro-text" id="intro-text">HERMES // CYBERSTREAM NETWORK</div>
+      <div class="intro-subtext">INICIALIZANDO CONEXÃO P2P</div>
     </div>
 
-    <!-- HOST VIEW (Dashboard) -->
-    <main id="host-view" class="shell" style="display: none;">
+    <!-- HOST VIEW (HERMES Station) -->
+    <main id="host-view" class="hermes-shell" style="display: none;">
+      <!-- Main Navigation / Header -->
       <header class="topbar">
         <div class="brand">
-          <div class="logo">LULE3000</div>
-          <div class="badge">STATION</div>
+          <div class="brand-symbol">
+            <svg viewBox="0 0 32 32" fill="none" class="brand-svg">
+              <path d="M16 3L3 10.5V21.5L16 29L29 21.5V10.5L16 3Z" stroke="var(--violet)" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M16 8L8 12.5V19.5L16 24L24 19.5V12.5L16 8Z" stroke="var(--purple)" stroke-width="1.5"/>
+              <circle cx="16" cy="16" r="3" fill="var(--magenta)"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <div class="logo">HERMES</div>
+            <div class="badge">CYBERSTREAM NETWORK</div>
+          </div>
         </div>
-        <div class="status-indicator" id="host-status-indicator">
-          <div class="pulse"></div>
-          <span id="status">OFFLINE</span>
+
+        <div class="topbar-center">
+          <div class="live-signal-badge" id="host-signal-badge">
+            <div class="signal-ring"></div>
+            <div class="signal-dot"></div>
+            <span id="status" class="signal-label">OFFLINE</span>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <span class="node-id-tag">NODE: <strong id="node-id-val">HMX-74F2</strong></span>
         </div>
       </header>
 
-      <div class="dashboard-grid">
-        <!-- Main Preview -->
+      <!-- Machine Core Layout -->
+      <div class="machine-grid">
+        <!-- Transmission Viewport / Stage -->
         <section class="stage host-stage" id="stage">
+          <div class="hud-corner top-left"></div>
+          <div class="hud-corner top-right"></div>
+          <div class="hud-corner bottom-left"></div>
+          <div class="hud-corner bottom-right"></div>
+
           <video id="video-host" autoplay playsinline muted></video>
+
           <div class="empty" id="empty">
-            <div class="core-visual"></div>
-            <strong id="empty-title">PRONTO PARA TRANSMITIR</strong>
-            <span id="empty-copy">Selecione uma tela, janela ou guia</span>
-            <button id="start" class="btn-primary">INICIAR TRANSMISSÃO</button>
+            <div class="core-visual">
+              <svg viewBox="0 0 80 80" fill="none" class="core-svg">
+                <circle cx="40" cy="40" r="36" stroke="var(--purple-deep)" stroke-width="2"/>
+                <circle cx="40" cy="40" r="28" stroke="var(--violet)" stroke-width="1.5" stroke-dasharray="6 4"/>
+                <polygon points="40,20 55,50 25,50" fill="var(--purple)" opacity="0.4"/>
+                <polygon points="40,60 25,30 55,30" fill="var(--magenta)" opacity="0.3"/>
+                <circle cx="40" cy="40" r="5" fill="var(--cyan-accent)"/>
+              </svg>
+            </div>
+            <strong id="empty-title">NÚCLEO DE TRANSMISSÃO PRONTO</strong>
+            <span id="empty-copy">Selecione uma janela, tela cheia ou guia para transmitir</span>
+            <button id="start" class="btn-primary btn-glow">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>INICIAR TRANSMISSÃO</span>
+            </button>
           </div>
         </section>
 
-        <!-- Side Panel -->
+        <!-- Session Node & Control Deck -->
         <aside class="side-panel">
-          <!-- Session Info -->
+          <!-- Session Core Node -->
           <div class="panel-card share-panel" id="share-panel">
             <div class="card-header">
-              <span>SESSÃO</span>
-              <strong id="tunnel-status">Criando túnel...</strong>
+              <div class="header-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                <span>SESSÃO PÚBLICA</span>
+              </div>
+              <strong id="tunnel-status" class="status-pill">Conectando...</strong>
             </div>
+
             <div class="copy-row">
-              <input id="watch-link" type="text" readonly value="..." />
-              <button id="copy-link" class="btn-secondary" disabled>COPIAR</button>
-              <a id="switch-link" href="/watch" class="btn-icon" title="Abrir Viewer">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <div class="input-wrapper">
+                <input id="watch-link" type="text" readonly value="..." />
+              </div>
+              <button id="copy-link" class="btn-secondary" title="Copiar link da sessão" disabled>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <span>COPIAR</span>
+              </button>
+              <a id="switch-link" href="/watch" target="_blank" class="btn-icon" title="Abrir como Visitante">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
               </a>
             </div>
-            <div class="metrics-row">
-              <div class="metric">
-                <span class="label">VIEWERS</span>
-                <strong id="viewer-count">0</strong>
-              </div>
-              <div class="metric">
-                <span class="label">MODE</span>
-                <strong id="mode">HOST</strong>
-              </div>
+
+            <div class="action-buttons-stack">
+              <button id="switch-source" class="btn-primary btn-alt" style="display: none;" title="Trocar a janela ou tela sem derrubar espectadores">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line><polyline points="17 8 20 11 17 14"></polyline><polyline points="7 14 4 11 7 8"></polyline></svg>
+                <span>ALTERAR FONTE</span>
+              </button>
+              <button id="stop" class="btn-danger" disabled title="Encerrar transmissão">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                <span>ENCERRAR SESSÃO</span>
+              </button>
             </div>
-            <button id="switch-source" class="btn-primary" style="display: none; margin-bottom: 8px;" title="Trocar a tela ou janela atual">ALTERAR FONTE</button>
-            <button id="stop" class="btn-danger" disabled>ENCERRAR SESSÃO</button>
           </div>
 
-          <!-- Quick Controls -->
-          <div class="panel-card">
-             <div class="card-header"><span>CONTROLES</span></div>
-             <div class="control-group">
-                <button id="settings-btn" class="btn-secondary">⚙ CONFIGURAÇÕES</button>
-                <button id="fullscreen" class="btn-secondary">⛶ TELA CHEIA</button>
-             </div>
+          <!-- Spectator Node Panel (Real-time Viewers) -->
+          <div class="panel-card spectator-card">
+            <div class="card-header">
+              <div class="header-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>ESPECTADORES</span>
+              </div>
+              <span id="viewer-count-badge" class="badge-pill">● <strong id="viewer-count">0</strong> CONECTADOS</span>
+            </div>
+
+            <div class="spectator-list-container" id="viewer-list">
+              <div class="empty-spectators" id="empty-spectators-msg">
+                <span>Nenhum espectador na sala no momento</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Controls Deck -->
+          <div class="panel-card control-deck-card">
+            <div class="card-header">
+              <div class="header-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span>CONTROLES</span>
+              </div>
+            </div>
+            <div class="control-grid">
+              <button id="settings-btn" class="btn-secondary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                <span>CONFIGURAÇÕES</span>
+              </button>
+              <button id="fullscreen" class="btn-secondary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                <span>TELA CHEIA</span>
+              </button>
+            </div>
           </div>
         </aside>
       </div>
-      
+
       <!-- Settings Drawer (Host) -->
       <div id="settings-drawer" class="drawer">
         <div class="drawer-header">
-          <h2>CONFIGURAÇÕES</h2>
-          <button id="close-settings" class="btn-icon">✕</button>
+          <div class="drawer-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <h2>CONFIGURAÇÕES DO HOST</h2>
+          </div>
+          <button id="close-settings" class="btn-icon" title="Fechar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
+
         <div class="drawer-content">
+          <!-- Audio Source Config -->
           <div class="config-group">
+            <div class="config-group-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+              <span>FONTE DE ÁUDIO</span>
+            </div>
             <label class="select-control" id="audio-mode-control">
-              <span>Fonte de Áudio Principal</span>
+              <span>Selecione a fonte principal</span>
               <select id="audio-mode">
-                <option value="screen" selected>Escolher tela/janela/guia</option>
-                <option value="screen-no-discord">Tela toda (Ignorar Discord)</option>
-                <option value="tab">Guia atual com áudio</option>
-                <option value="input">Entrada do Windows</option>
-                <option value="none">Sem áudio</option>
+                <option value="screen" selected>Captura de Tela / Guia (Nativo)</option>
+                <option value="screen-no-discord">Tela Toda (Isolar / Ignorar Discord)</option>
+                <option value="tab">Guia Atual do Navegador</option>
+                <option value="input">Entrada de Áudio do Windows (WASAPI)</option>
+                <option value="none">Transmitir Sem Áudio</option>
               </select>
             </label>
+
             <label class="select-control" id="audio-device-control" style="display:none;">
               <span>Dispositivo WASAPI</span>
               <select id="audio-device"></select>
             </label>
-            <button id="refresh-audio" class="btn-secondary btn-sm">Atualizar áudio</button>
+
+            <button id="refresh-audio" class="btn-secondary btn-sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+              <span>Atualizar Dispositivos</span>
+            </button>
           </div>
 
+          <!-- Application Mixer Config -->
           <div class="config-group app-mixer" id="app-mixer">
              <div class="mixer-head">
-               <span>Mixer de Aplicativos</span>
-               <button id="refresh-apps" class="btn-secondary btn-sm">Atualizar lista</button>
+               <div class="config-group-title">
+                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                 <span>ISOLAMENTO DE APLICATIVOS</span>
+               </div>
+               <button id="refresh-apps" class="btn-secondary btn-sm">
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                 <span>Atualizar Apps</span>
+               </button>
              </div>
-             <strong id="mixer-status" class="status-text">Carregando...</strong>
+             <strong id="mixer-status" class="status-text">Carregando processos ativos...</strong>
              <div class="app-list" id="app-list"></div>
           </div>
 
+          <!-- Audio Monitor Panel -->
           <div class="config-group audio-panel" id="audio-panel">
-             <span>Monitoramento</span>
+             <div class="config-group-title">
+               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h5l3 9 4-18 3 9h5"></path></svg>
+               <span>MONITORAMENTO LOCAL</span>
+             </div>
              <strong id="audio-panel-status" class="status-text">Aguardando seleção</strong>
              <audio id="filtered-audio-player" controls></audio>
           </div>
@@ -121,36 +235,60 @@
       </div>
     </main>
 
-    <!-- VIEWER VIEW (Custom Player) -->
+    <!-- VIEWER VIEW (Cinematic Player) -->
     <main id="viewer-view" class="viewer-layout" style="display: none;">
       <!-- Wait Screen -->
       <div id="viewer-wait-screen" class="wait-screen">
-         <div class="core-visual pulse-violet"></div>
-         <h2 id="viewer-status-text">AGUARDANDO TRANSMISSÃO</h2>
-         <p>Conectando ao núcleo LULE3000...</p>
+         <div class="scanning-core">
+            <svg viewBox="0 0 100 100" class="scan-svg">
+              <circle cx="50" cy="50" r="44" stroke="var(--purple-deep)" stroke-width="2"/>
+              <circle cx="50" cy="50" r="34" stroke="var(--violet)" stroke-width="1.5" stroke-dasharray="8 6"/>
+              <circle cx="50" cy="50" r="24" stroke="var(--magenta)" stroke-width="1.5" class="radar-pulse"/>
+              <circle cx="50" cy="50" r="6" fill="var(--cyan-accent)"/>
+            </svg>
+         </div>
+         <h2 id="viewer-status-text">HERMES NETWORK // BUSCANDO SINAL</h2>
+         <p>Aguardando o Host iniciar a transmissão em tempo real...</p>
       </div>
 
       <!-- Player Stage -->
       <div id="viewer-stage" class="player-stage hidden">
          <video id="video-viewer" playsinline></video>
+
          <button id="unmute-overlay-btn" class="unmute-overlay">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
-            <span>CLIQUE PARA OUVIR</span>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+            <span>CLIQUE PARA ATIVAR O ÁUDIO</span>
          </button>
          
          <div class="player-overlay" id="player-overlay">
-           <!-- Top Bar -->
+           <!-- Top Bar Overlay -->
            <div class="player-top-bar">
-              <div class="logo-minimal">LULE3000</div>
-              <div class="connection-pill" id="conn-indicator">
-                <span class="dot"></span>
-                <span id="conn-text">Conectando...</span>
+              <div class="brand-minimal">
+                <svg viewBox="0 0 24 24" fill="none" class="brand-svg-sm">
+                  <path d="M12 2L2 7.5V16.5L12 22L22 16.5V7.5L12 2Z" stroke="var(--violet)" stroke-width="2"/>
+                  <circle cx="12" cy="12" r="3" fill="var(--magenta)"/>
+                </svg>
+                <span>HERMES</span>
+                <span class="live-pill">● LIVE</span>
+              </div>
+
+              <div class="top-bar-right">
+                <div class="connection-pill" id="conn-indicator" title="Clique para exibir diagnóstico de rede">
+                  <span class="dot"></span>
+                  <span id="conn-text">Conectando...</span>
+                </div>
+                <button id="btn-viewer-settings" class="btn-icon" title="Configurações do Espectador">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
               </div>
            </div>
 
-           <!-- Stats Panel -->
+           <!-- Telemetry Diagnostic Panel -->
            <div id="stats-panel" class="stats-panel hidden">
-              <div class="stats-header">DIAGNÓSTICO DA CONEXÃO</div>
+              <div class="stats-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <span>DIAGNÓSTICO DA CONEXÃO</span>
+              </div>
               <div class="stats-grid">
                  <div><span>RESOLUÇÃO</span><strong id="stat-res">--</strong></div>
                  <div><span>FPS</span><strong id="stat-fps">--</strong></div>
@@ -162,49 +300,144 @@
               </div>
            </div>
 
-           <!-- Bottom Bar -->
+           <!-- Command Deck Controls (Bottom Bar) -->
            <div class="player-bottom-bar" id="player-controls">
               <div class="controls-left">
-                 <button id="btn-play-pause" class="btn-icon">
-                    <svg class="icon-play hidden" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    <svg class="icon-pause" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                 <button id="btn-play-pause" class="btn-icon" title="Reproduzir / Pausar">
+                    <svg class="icon-play hidden" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    <svg class="icon-pause" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                  </button>
-                 <button id="btn-mute" class="btn-icon">
-                    <svg class="icon-vol" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                    <svg class="icon-muted hidden" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+
+                 <button id="btn-mute" class="btn-icon" title="Ativar / Silenciar Áudio">
+                    <svg class="icon-vol" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                    <svg class="icon-muted hidden" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
                  </button>
+
                  <div class="volume-slider-container">
                    <input id="volume" type="range" min="0" max="100" value="85" class="vol-slider" />
                  </div>
               </div>
               
               <div class="controls-right">
-                 <!-- Quality Selector -->
+                 <!-- Quality Selector Menu -->
                  <div class="quality-wrapper" id="quality-wrapper">
-                   <button id="btn-quality" class="btn-text">AUTO</button>
+                   <button id="btn-quality" class="btn-text" title="Ajustar Qualidade">AUTO</button>
                    <div id="quality-menu" class="quality-menu hidden">
-                     <div class="q-option active" data-q="AUTO">AUTO <span class="q-desc">Dinâmico</span></div>
-                     <div class="q-option" data-q="ORIGINAL">ORIGINAL <span class="q-desc">Máxima</span></div>
-                     <div class="q-option" data-q="1080p">1080p <span class="q-desc">Alta Definição</span></div>
-                     <div class="q-option" data-q="720p">720p <span class="q-desc">Equilíbrio</span></div>
-                     <div class="q-option" data-q="480p">480p <span class="q-desc">Básico</span></div>
-                     <div class="q-option" data-q="ECONOMY">ECONOMY <span class="q-desc">Sobrevivência</span></div>
+                     <div class="q-option active" data-q="AUTO">
+                       <span>AUTO</span>
+                       <span class="q-desc">Adaptativa</span>
+                     </div>
+                     <div class="q-option" data-q="ORIGINAL">
+                       <span>ORIGINAL</span>
+                       <span class="q-desc">Máxima Fidelidade</span>
+                     </div>
+                     <div class="q-option" data-q="1080p">
+                       <span>1080p</span>
+                       <span class="q-desc">Alta Definição</span>
+                     </div>
+                     <div class="q-option" data-q="720p">
+                       <span>720p</span>
+                       <span class="q-desc">Equilíbrio</span>
+                     </div>
+                     <div class="q-option" data-q="480p">
+                       <span>480p</span>
+                       <span class="q-desc">Baixa Banda</span>
+                     </div>
+                     <div class="q-option" data-q="ECONOMY">
+                       <span>ECONOMIA</span>
+                       <span class="q-desc">Estabilidade</span>
+                     </div>
                    </div>
                  </div>
                  
                  <button id="btn-pip" class="btn-icon" title="Desprender tela (Picture-in-Picture)">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="12" y="12" width="7" height="5" rx="1" ry="1"></rect></svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="12" y="12" width="7" height="5" rx="1" ry="1"></rect></svg>
                  </button>
-                 <button id="btn-fullscreen-viewer" class="btn-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+
+                 <button id="btn-fullscreen-viewer" class="btn-icon" title="Modo Tela Cheia">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
                  </button>
               </div>
            </div>
          </div>
       </div>
     </main>
+
+    <!-- Viewer Settings Drawer -->
+    <div id="viewer-settings-drawer" class="drawer">
+      <div class="drawer-header">
+        <div class="drawer-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <h2>CONFIGURAÇÕES DO ESPECTADOR</h2>
+        </div>
+        <button id="close-viewer-settings" class="btn-icon" title="Fechar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="drawer-content">
+        <div class="config-group">
+          <div class="config-group-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span>SEU PERFIL NA REDE</span>
+          </div>
+          <div class="input-control">
+            <span>Nickname</span>
+            <div class="input-with-button">
+              <input id="viewer-nick-input" type="text" maxlength="24" placeholder="Insira seu apelido" />
+              <button id="save-nick-btn" class="btn-primary btn-sm">SALVAR</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MANDATORY ONBOARDING NICKNAME MODAL -->
+    <div id="nickname-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-brand">
+          <svg viewBox="0 0 48 48" fill="none" class="modal-logo-svg">
+            <polygon points="24,3 42,13 42,35 24,45 6,35 6,13" stroke="var(--violet)" stroke-width="2" stroke-linejoin="round"/>
+            <circle cx="24" cy="24" r="5" fill="var(--magenta)"/>
+          </svg>
+          <div class="modal-title-group">
+            <h3>HERMES NETWORK</h3>
+            <span class="modal-subtitle">IDENTIFICAÇÃO OBRIGATÓRIA</span>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <p>Como devemos chamar você durante esta transmissão?</p>
+          <input id="onboarding-nickname" type="text" maxlength="24" placeholder="Seu nickname..." autofocus autocomplete="off" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-enter-network" class="btn-primary btn-glow btn-full">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <span>ENTRAR NA REDE</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIRMATION MODAL -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-card confirm-card">
+        <div class="modal-title-group">
+          <h3 id="confirm-title">ENCERRAR TRANSMISSÃO?</h3>
+          <span class="modal-subtitle" id="confirm-subtitle">Todos os espectadores conectados serão desconectados do nó.</span>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-confirm-cancel" class="btn-secondary">CANCELAR</button>
+          <button id="btn-confirm-stop" class="btn-danger">ENCERRAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Toast Container -->
     <div id="toast" class="toast"></div>
-    <div id="volume-value" style="display:none">85%</div> <!-- dummy element for compat -->
+
+    <div id="volume-value" style="display:none">85%</div>
 
     <script src="/static/app.js"></script>
   </body>

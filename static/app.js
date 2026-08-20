@@ -96,19 +96,143 @@ function socketIsOpen() {
   return socket?.readyState === WebSocket.OPEN;
 }
 
+const spectatorMap = new Map();
+let viewerNickname = localStorage.getItem("hermes_viewer_nickname") || "";
+
+const AVATAR_PALETTE = ['#7c3aed', '#8b5cf6', '#d946ef', '#22d3ee', '#4c1d95', '#a78bfa', '#ff3b5c', '#46f0a0'];
+
+function getAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < (name || "").length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
+function renderSpectatorList() {
+  const container = document.getElementById("viewer-list");
+  const countEl = document.getElementById("viewer-count");
+  if (countEl) countEl.textContent = String(spectatorMap.size);
+
+  if (!container) return;
+  if (spectatorMap.size === 0) {
+    container.innerHTML = '<div class="empty-spectators"><span>Nenhum espectador na sala no momento</span></div>';
+    return;
+  }
+
+  let html = '';
+  spectatorMap.forEach((v, id) => {
+    const nick = v.nickname || "Espectador";
+    const initial = nick.charAt(0).toUpperCase();
+    const bg = getAvatarColor(nick);
+    const safeNick = escapeHtml(nick);
+    html += `
+      <div class="spectator-item" id="spectator-${id}">
+        <div class="spectator-info">
+          <div class="avatar-circle" style="background-color: ${bg};">${initial}</div>
+          <span class="spectator-name">${safeNick}</span>
+        </div>
+        <div class="spectator-status-dot" title="Conectado"></div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+function checkViewerOnboarding() {
+  if (!isViewer) {
+    connect();
+    return;
+  }
+  const saved = localStorage.getItem("hermes_viewer_nickname");
+  if (saved && saved.trim()) {
+    viewerNickname = saved.trim();
+    connect();
+  } else {
+    const modal = document.getElementById("nickname-modal");
+    if (modal) modal.classList.remove("hidden");
+  }
+}
+
+function submitOnboardingNickname() {
+  const input = document.getElementById("onboarding-nickname");
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) {
+    showToast("Por favor, digite um nickname válido.", "warning");
+    return;
+  }
+  viewerNickname = val.substring(0, 24);
+  localStorage.setItem("hermes_viewer_nickname", viewerNickname);
+  const modal = document.getElementById("nickname-modal");
+  if (modal) modal.classList.add("hidden");
+  connect();
+}
+
+function updateViewerNickname(newNick) {
+  newNick = (newNick || "").trim().substring(0, 24);
+  if (!newNick) {
+    showToast("Nickname inválido.", "warning");
+    return;
+  }
+  viewerNickname = newNick;
+  localStorage.setItem("hermes_viewer_nickname", viewerNickname);
+  if (socketIsOpen()) {
+    send({ type: "viewer-update", nickname: viewerNickname });
+  }
+  showToast("Nickname atualizado!", "success");
+}
+
+function showConfirmModal(title, text, onConfirm) {
+  const modal = document.getElementById("confirm-modal");
+  const titleEl = document.getElementById("confirm-title");
+  const subEl = document.getElementById("confirm-subtitle");
+  const btnCancel = document.getElementById("btn-confirm-cancel");
+  const btnStop = document.getElementById("btn-confirm-stop");
+
+  if (!modal) { onConfirm(); return; }
+  if (titleEl && title) titleEl.textContent = title;
+  if (subEl && text) subEl.textContent = text;
+
+  modal.classList.remove("hidden");
+
+  const cleanup = () => {
+    modal.classList.add("hidden");
+    if (btnStop) btnStop.onclick = null;
+    if (btnCancel) btnCancel.onclick = null;
+  };
+
+  if (btnStop) btnStop.onclick = () => { cleanup(); onConfirm(); };
+  if (btnCancel) btnCancel.onclick = () => { cleanup(); };
+}
+
 function updateHostCaptureState(newState) {
   currentCaptureState = newState;
   const btnSwitch = document.getElementById("switch-source");
+  const badge = document.getElementById("host-signal-badge");
+
   if (btnSwitch) {
-      btnSwitch.style.display = newState === CaptureState.STREAMING ? "block" : "none";
+    btnSwitch.style.display = newState === CaptureState.STREAMING ? "inline-flex" : "none";
   }
+  if (badge) {
+    badge.className = "live-signal-badge";
+    if (newState === CaptureState.STREAMING) badge.classList.add("streaming");
+    else if (newState === CaptureState.REQUESTING_CAPTURE) badge.classList.add("reconnecting");
+  }
+
   if (newState === CaptureState.IDLE) {
-    setStatus("Desconectado");
+    setStatus("OFFLINE");
     activeAudioSource = AudioSource.NONE;
   } else if (newState === CaptureState.REQUESTING_CAPTURE) {
-    setStatus("Solicitando captura");
+    setStatus("SOLICITANDO CAPTURA");
   } else if (newState === CaptureState.STREAMING) {
-    setStatus("Transmitindo");
+    setStatus("TRANSMITINDO");
   } else if (newState === CaptureState.ERROR) {
     // Error status set in startShare
   }
@@ -117,14 +241,14 @@ function updateHostCaptureState(newState) {
 function refreshHostStatus() {
   if (isViewer) return;
   if (currentCaptureState === CaptureState.ERROR || currentCaptureState === CaptureState.REQUESTING_CAPTURE) {
-    return; // Handled by state machine
+    return;
   }
   if (localStream && socketIsOpen()) {
     updateHostCaptureState(CaptureState.STREAMING);
   } else if (localStream) {
-    setStatus("Reconectando");
+    setStatus("RECONECTANDO");
   } else if (socketIsOpen()) {
-    setStatus("Conectado");
+    setStatus("CONECTADO");
   } else {
     updateHostCaptureState(CaptureState.IDLE);
   }
@@ -226,12 +350,12 @@ function connect() {
   socket = new WebSocket(`${scheme}://${window.location.host}/ws`);
 
   socket.addEventListener("open", () => {
-    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId });
+    send({ type: "join", role: isViewer ? "viewer" : "host", sessionId: viewerSessionId, nickname: viewerNickname });
     refreshHostStatus();
     if (isViewer && !videoEl.srcObject && peers.size === 0) {
-      setStatus("Aguardando host");
+      setStatus("Aguardando host...");
     } else if (isViewer) {
-      setStatus("Sinalizacao conectada");
+      setStatus("Sinalização conectada");
     }
     
     clearInterval(heartbeatInterval);
@@ -239,7 +363,7 @@ function connect() {
     heartbeatInterval = setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
             if (Date.now() - lastHeartbeatAck > 45000) {
-                console.warn("[LULE3000] Heartbeat timeout. Fechando socket para forcar reconexao.");
+                console.warn("[HERMES] Heartbeat timeout. Fechando socket para forçar reconexão.");
                 socket.close();
             } else {
                 send({ type: "heartbeat", timestamp: Date.now() });
@@ -253,8 +377,7 @@ function connect() {
     if (!isViewer) {
       refreshHostStatus();
     } else {
-      setStatus("Sinalizacao reconectando...");
-      // Não damos setEmpty(true) para não matar o player!
+      setStatus("Reconectando sinal...");
     }
     reconnectTimer = setTimeout(connect, 2000);
   });
@@ -272,8 +395,8 @@ function connect() {
     }
 
     if (data.type === "joined" && data.role === "viewer") {
-      viewerId = data.viewerId; // Na nova arq, o server devolve nosso sessionId como viewerId
-      if (!videoEl.srcObject && peers.size === 0) setStatus("Aguardando host");
+      viewerId = data.viewerId;
+      if (!videoEl.srcObject && peers.size === 0) setStatus("Aguardando host...");
       return;
     }
 
@@ -282,32 +405,55 @@ function connect() {
       return;
     }
 
+    if (data.type === "viewer-list" && !isViewer) {
+      spectatorMap.clear();
+      if (Array.isArray(data.viewers)) {
+        data.viewers.forEach(v => spectatorMap.set(v.viewerId, { nickname: v.nickname }));
+      }
+      renderSpectatorList();
+      return;
+    }
+
     if (data.type === "viewer-joined" && !isViewer) {
-      viewerCount += 1;
-      viewerCountEl.textContent = String(viewerCount);
+      const nick = data.nickname || "Espectador";
+      spectatorMap.set(data.viewerId, { nickname: nick });
+      renderSpectatorList();
+      showToast(`${nick} entrou na rede`, "info");
       if (localStream) await createOfferForViewer(data.viewerId);
       return;
     }
 
+    if (data.type === "viewer-updated" && !isViewer) {
+      const old = spectatorMap.get(data.viewerId);
+      const oldNick = old ? old.nickname : "Espectador";
+      const newNick = data.nickname || "Espectador";
+      spectatorMap.set(data.viewerId, { nickname: newNick });
+      renderSpectatorList();
+      showToast(`${oldNick} alterou o nick para ${newNick}`, "info");
+      return;
+    }
+
     if (data.type === "viewer-left" && !isViewer) {
-      // Grace period para o host ignorar quedas falsas de viewer
+      const old = spectatorMap.get(data.viewerId);
+      const name = old ? old.nickname : (data.nickname || "Espectador");
       setTimeout(() => {
          const peer = peers.get(data.viewerId);
-         if (peer && peer.connectionState !== "connected" && peer.connectionState !== "checking") {
-            viewerCount = Math.max(0, viewerCount - 1);
-            viewerCountEl.textContent = String(viewerCount);
+         if (!peer || (peer.connectionState !== "connected" && peer.connectionState !== "checking")) {
+            spectatorMap.delete(data.viewerId);
+            renderSpectatorList();
+            showToast(`${name} saiu da rede`, "info");
             closePeer(data.viewerId);
          }
-      }, 5000);
+      }, 4000);
       return;
     }
 
     if (data.type === "viewer-reconnected" && !isViewer) {
-      console.log("[LULE3000] Viewer reconectou ao sinal: " + data.viewerId);
+      const nick = data.nickname || "Espectador";
+      spectatorMap.set(data.viewerId, { nickname: nick });
+      renderSpectatorList();
       const peer = peers.get(data.viewerId);
       if (!peer || peer.connectionState === "closed" || peer.connectionState === "failed") {
-          viewerCount += 1;
-          viewerCountEl.textContent = String(viewerCount);
           if (localStream) await createOfferForViewer(data.viewerId);
       }
       return;
@@ -1073,7 +1219,7 @@ async function toggleTransmissionExclude(processId) {
 
 function setupUi() {
   if (isViewer) {
-    if (titleEl) titleEl.textContent = "JANJA";
+    if (titleEl) titleEl.textContent = "HERMES";
     if (modeEl) modeEl.textContent = "Visitante";
     if (startButton) startButton.style.display = "none";
     if (stopButton) stopButton.style.display = "none";
@@ -1084,32 +1230,36 @@ function setupUi() {
     if (appMixer) appMixer.style.display = "none";
     if (audioPanel) audioPanel.style.display = "none";
     if (volumeControl) volumeControl.style.display = "inline-flex";
-    if (typeof audioPanelLabel !== "undefined" && audioPanelLabel) audioPanelLabel.textContent = "Audio da transmissao";
-    if (typeof audioPanelStatus !== "undefined" && audioPanelStatus) audioPanelStatus.textContent = "Aguardando audio filtrado";
     if (switchLink) {
         switchLink.href = "/host";
-        switchLink.textContent = "Abrir como host";
+        switchLink.textContent = "Abrir como Host";
     }
     if (videoEl) {
-        videoEl.controls = true;
+        videoEl.controls = false;
         videoEl.defaultMuted = false;
         videoEl.removeAttribute("muted");
     }
     applyViewerVolume();
-    setEmpty(true, "Aguardando transmissao", "Quando o host iniciar, a tela aparece aqui automaticamente.");
+    setEmpty(true, "HERMES NETWORK // BUSCANDO SINAL", "Quando o host iniciar a transmissão, o sinal aparece aqui em tempo real.");
   } else {
-    if (titleEl) titleEl.textContent = "JANJA";
+    if (titleEl) titleEl.textContent = "HERMES";
     if (modeEl) modeEl.textContent = "Host";
     if (switchLink) {
         switchLink.href = "/watch";
-        switchLink.textContent = "Abrir como visitante";
+        switchLink.textContent = "Abrir como Visitante";
     }
     if (appMixer) appMixer.style.display = "none";
     if (audioPanel) audioPanel.style.display = "none";
   }
 
   if (startButton) startButton.addEventListener("click", startShare);
-  if (stopButton) stopButton.addEventListener("click", stopShare);
+  if (stopButton) {
+    stopButton.addEventListener("click", () => {
+      showConfirmModal("ENCERRAR TRANSMISSÃO?", "Todos os espectadores conectados serão desconectados do nó.", () => {
+        stopShare();
+      });
+    });
+  }
   if (fullscreenButton) fullscreenButton.addEventListener("click", toggleFullscreen);
   if (copyLinkButton) copyLinkButton.addEventListener("click", copyWatchLink);
   if (refreshAppsButton) refreshAppsButton.addEventListener("click", loadAudioApps);
@@ -1121,22 +1271,6 @@ function setupUi() {
       volumeInput.addEventListener("input", syncVolume);
       volumeInput.addEventListener("change", syncVolume);
   }
-  if (videoEl) {
-      videoEl.addEventListener("click", () => {
-        if (isViewer) {
-          syncVolume();
-          remoteAudioContext?.resume();
-        }
-      });
-  }
-  document.addEventListener("click", () => {
-    if (isViewer) {
-      remoteAudioContext?.resume();
-      if (typeof filteredAudioPlayer !== "undefined" && filteredAudioPlayer && filteredAudioPlayer.src) {
-          filteredAudioPlayer.play().catch(() => {});
-      }
-    }
-  });
 
   if (!isViewer) {
     syncAudioMode();
@@ -1148,10 +1282,43 @@ function setupUi() {
 }
 
 setupUi();
-connect();
+checkViewerOnboarding();
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Layout Switching
+    // Onboarding Nickname Modal Events
+    const btnEnter = document.getElementById("btn-enter-network");
+    const onboardingInput = document.getElementById("onboarding-nickname");
+    if (btnEnter) btnEnter.addEventListener("click", submitOnboardingNickname);
+    if (onboardingInput) {
+      onboardingInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitOnboardingNickname();
+      });
+    }
+
+    // Viewer Settings Drawer Events
+    const btnViewerSettings = document.getElementById("btn-viewer-settings");
+    const closeViewerSettings = document.getElementById("close-viewer-settings");
+    const viewerSettingsDrawer = document.getElementById("viewer-settings-drawer");
+    const saveNickBtn = document.getElementById("save-nick-btn");
+    const viewerNickInput = document.getElementById("viewer-nick-input");
+
+    if (btnViewerSettings && viewerSettingsDrawer) {
+      btnViewerSettings.addEventListener("click", () => {
+        if (viewerNickInput) viewerNickInput.value = viewerNickname;
+        viewerSettingsDrawer.classList.add("open");
+      });
+    }
+    if (closeViewerSettings && viewerSettingsDrawer) {
+      closeViewerSettings.addEventListener("click", () => viewerSettingsDrawer.classList.remove("open"));
+    }
+    if (saveNickBtn && viewerNickInput) {
+      saveNickBtn.addEventListener("click", () => {
+        updateViewerNickname(viewerNickInput.value);
+        if (viewerSettingsDrawer) viewerSettingsDrawer.classList.remove("open");
+      });
+    }
+
+    // Layout Switching
     const hostView = document.getElementById("host-view");
     const viewerView = document.getElementById("viewer-view");
     if (isViewer) {
@@ -1164,20 +1331,21 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.classList.add("host-mode");
     }
 
-    // 2. Intro Animation
+    // Intro Animation
     const introSeq = document.getElementById("intro-sequence");
     if (introSeq) {
-        if (!sessionStorage.getItem("lule_intro_played")) {
+        if (!sessionStorage.getItem("hermes_intro_played")) {
             setTimeout(() => {
-                introSeq.classList.remove("intro-active");
-                sessionStorage.setItem("lule_intro_played", "true");
-            }, 2000);
+                introSeq.classList.add("fade-out");
+                sessionStorage.setItem("hermes_intro_played", "true");
+                setTimeout(() => introSeq.style.display = "none", 500);
+            }, 1800);
         } else {
             introSeq.style.display = "none";
         }
     }
 
-    // 3. Settings Drawer (Host)
+    // Host Settings Drawer
     const settingsBtn = document.getElementById("settings-btn");
     const closeSettings = document.getElementById("close-settings");
     const drawer = document.getElementById("settings-drawer");
@@ -1312,12 +1480,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
-function showToast(msg) {
+function showToast(msg, type = "info") {
     const toast = document.getElementById("toast");
     if (!toast) return;
     toast.textContent = msg;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 3000);
+    toast.className = `toast show ${type}`;
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.className = "toast";
+    }, 3200);
 }
 
 // 5. Adaptive Quality Protocol

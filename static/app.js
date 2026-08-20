@@ -98,6 +98,10 @@ function socketIsOpen() {
 
 function updateHostCaptureState(newState) {
   currentCaptureState = newState;
+  const btnSwitch = document.getElementById("switch-source");
+  if (btnSwitch) {
+      btnSwitch.style.display = newState === CaptureState.STREAMING ? "block" : "none";
+  }
   if (newState === CaptureState.IDLE) {
     setStatus("Desconectado");
     activeAudioSource = AudioSource.NONE;
@@ -1549,18 +1553,5 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Atualiza visibilidade do botão com base no status do host
-    const originalUpdateHostCaptureState = window.updateHostCaptureState;
-    if (typeof originalUpdateHostCaptureState === "function") {
-        window.updateHostCaptureState = function(newState) {
-            originalUpdateHostCaptureState(newState);
-            if (btnSwitch) {
-                if (newState === CaptureState.STREAMING) {
-                    btnSwitch.style.display = "block";
-                } else {
-                    btnSwitch.style.display = "none";
-                }
-            }
-        };
-    }
+    // Visibilidade controlada diretamente em updateHostCaptureState()
 });
